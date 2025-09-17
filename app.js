@@ -604,8 +604,8 @@ class EsteticaFabianeSystem {
         }).join('');
     }
 
-    renderServicos() {
-        const servicos = this.getServicos();
+    async renderServicos() {
+        const servicos = await this.getServicos();
         const tbody = document.getElementById('servicos-table');
 
         if (servicos.length === 0) {
@@ -642,10 +642,10 @@ class EsteticaFabianeSystem {
         `).join('');
     }
 
-    renderAgendamentos() {
-        const agendamentos = this.getAgendamentos();
-        const clientes = this.getClientes();
-        const servicos = this.getServicos();
+    async renderAgendamentos() {
+        const agendamentos = await this.getAgendamentos();
+        const clientes = await this.getClientes();
+        const servicos = await this.getServicos();
         const tbody = document.getElementById('agendamentos-table');
 
         if (agendamentos.length === 0) {
@@ -687,8 +687,8 @@ class EsteticaFabianeSystem {
         }).join('');
     }
 
-    renderProdutos() {
-        const produtos = this.getProdutos();
+    async renderProdutos() {
+        const produtos = await this.getProdutos();
         const tbody = document.getElementById('produtos-table');
 
         if (produtos.length === 0) {
@@ -815,13 +815,13 @@ class EsteticaFabianeSystem {
         document.getElementById('servicos-realizados').textContent = servicosRealizados;
 
         // Próximos agendamentos
-        this.renderProximosAgendamentos();
+        await this.renderProximosAgendamentos();
     }
 
-    renderProximosAgendamentos() {
-        const agendamentos = this.getAgendamentos();
-        const clientes = this.getClientes();
-        const servicos = this.getServicos();
+    async renderProximosAgendamentos() {
+        const agendamentos = await this.getAgendamentos();
+        const clientes = await this.getClientes();
+        const servicos = await this.getServicos();
         const container = document.getElementById('proximos-agendamentos');
         
         const hoje = new Date();
@@ -914,19 +914,22 @@ class EsteticaFabianeSystem {
                 break;
             case 'clientes':
                 await this.renderClientes();
-                this.updateClienteSelect();
+                await this.updateClienteSelect();
                 break;
             case 'agendamentos':
-                this.renderAgendamentos();
+                await this.renderAgendamentos();
                 break;
             case 'servicos':
-                this.renderServicos();
+                await this.renderServicos();
                 break;
             case 'produtos':
-                this.renderProdutos();
+                await this.renderProdutos();
+                break;
+            case 'calendario':
+                await this.renderCalendar();
                 break;
             case 'relatorios':
-                this.updateRelatorios();
+                await this.updateRelatorios();
                 break;
         }
     }
@@ -953,8 +956,8 @@ class EsteticaFabianeSystem {
         }
     }
 
-    updateClienteSelect() {
-        const clientes = this.getClientes();
+    async updateClienteSelect() {
+        const clientes = await this.getClientes();
         const select = document.querySelector('select[name="clienteId"]');
         
         if (select) {
@@ -965,8 +968,8 @@ class EsteticaFabianeSystem {
         }
     }
 
-    updateServicoSelect() {
-        const servicos = this.getServicos();
+    async updateServicoSelect() {
+        const servicos = await this.getServicos();
         const select = document.querySelector('select[name="servicoId"]');
         
         if (select) {
@@ -1008,21 +1011,21 @@ class EsteticaFabianeSystem {
         const nextBtn = document.getElementById('next-month');
         
         if (prevBtn) {
-            prevBtn.addEventListener('click', () => {
+            prevBtn.addEventListener('click', async () => {
                 this.currentDate.setMonth(this.currentDate.getMonth() - 1);
-                this.renderCalendar();
+                await this.renderCalendar();
             });
         }
         
         if (nextBtn) {
-            nextBtn.addEventListener('click', () => {
+            nextBtn.addEventListener('click', async () => {
                 this.currentDate.setMonth(this.currentDate.getMonth() + 1);
-                this.renderCalendar();
+                await this.renderCalendar();
             });
         }
     }
     
-    renderCalendar() {
+    async renderCalendar() {
         const calendarTitle = document.getElementById('calendar-title');
         const calendarDays = document.getElementById('calendar-days');
         
@@ -1046,7 +1049,7 @@ class EsteticaFabianeSystem {
         startDate.setDate(startDate.getDate() - firstDay.getDay());
         
         // Obter agendamentos do mês
-        const agendamentos = this.getAgendamentos();
+        const agendamentos = await this.getAgendamentos();
         const today = new Date();
         
         // Gerar 42 dias (6 semanas)
@@ -1385,11 +1388,11 @@ class EsteticaFabianeSystem {
 
     // ===== FUNÇÕES PARA RELATÓRIOS =====
 
-    getDashboardStats() {
-        const clientes = this.getClientes();
-        const agendamentos = this.getAgendamentos();
-        const servicos = this.getServicos();
-        const produtos = this.getProdutos();
+    async getDashboardStats() {
+        const clientes = await this.getClientes();
+        const agendamentos = await this.getAgendamentos();
+        const servicos = await this.getServicos();
+        const produtos = await this.getProdutos();
         
         // Calcular receita total dos agendamentos realizados
         const receitaTotal = agendamentos
@@ -1408,14 +1411,39 @@ class EsteticaFabianeSystem {
         };
     }
 
-    getData(type) {
+    async getExportData(tipo) {
+        switch(tipo) {
+            case 'geral':
+                return {
+                    clientes: await this.getClientes(),
+                    agendamentos: await this.getAgendamentos(),
+                    servicos: await this.getServicos(),
+                    produtos: await this.getProdutos()
+                };
+            case 'detalhado':
+                return {
+                    resumo: await this.getDashboardStats(),
+                    clientes: await this.getClientes(),
+                    agendamentos: await this.getAgendamentos(),
+                    servicos: await this.getServicos(),
+                    produtos: await this.getProdutos()
+                };
+            default:
+                return {};
+        }
+    }
+
+    async getData(type) {
         switch(type) {
             case 'clientes':
-                return this.getClientes();
+                return await this.getClientes();
             case 'agendamentos':
-                return this.getAgendamentos().map(agendamento => {
-                    const cliente = this.getClientes().find(c => c.id === agendamento.clienteId);
-                    const servico = this.getServicos().find(s => s.id === agendamento.servicoId);
+                const agendamentos = await this.getAgendamentos();
+                const clientes = await this.getClientes();
+                const servicos = await this.getServicos();
+                return agendamentos.map(agendamento => {
+                    const cliente = clientes.find(c => c.id === agendamento.clienteId);
+                    const servico = servicos.find(s => s.id === agendamento.servicoId);
                     return {
                         ...agendamento,
                         cliente: cliente ? cliente.nome : 'Cliente não encontrado',
@@ -1423,9 +1451,10 @@ class EsteticaFabianeSystem {
                     };
                 });
             case 'servicos':
-                return this.getServicos();
+                return await this.getServicos();
             case 'produtos':
-                return this.getProdutos().map(produto => ({
+                const produtos = await this.getProdutos();
+                return produtos.map(produto => ({
                     ...produto,
                     estoque: produto.quantidade,
                     fornecedor: produto.fornecedor || 'Não informado'
@@ -1497,9 +1526,9 @@ function deleteProdutoConfirm(id) {
 }
 
 // Exportação de relatórios
-function exportRelatoriGeral() {
+async function exportarRelatorioGeral() {
     try {
-        const wb = XLSX.utils.book_new();
+        const dados = await esteticaFabiane.getExportData('geral');
         
         // Dados do dashboard
         const stats = esteticaFabiane.getDashboardStats();
@@ -1592,7 +1621,7 @@ function exportRelatoriGeral() {
                     };
                     
                     // Destacar valores numéricos
-                    if (C === 1 && (R >= 7 && R <= 10 || R === 13)) {
+                    if (ws[cell_address].v && typeof ws[cell_address].v === 'string' && ws[cell_address].v.includes('R$')) {
                         ws[cell_address].s.font.bold = true;
                         ws[cell_address].s.font.color = { rgb: "E91E63" };
                     }
@@ -1654,9 +1683,9 @@ function exportRelatoriGeral() {
     }
 }
 
-function exportRelatorioDetalhado() {
+async function exportarRelatorioDetalhado() {
     try {
-        const wb = XLSX.utils.book_new();
+        const dados = await esteticaFabiane.getExportData('detalhado');
         const currentDate = new Date().toLocaleDateString('pt-BR');
         
         // Função para aplicar estilos personalizados
