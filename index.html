@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estética Fabiane Procópio - Sistema de Gestão</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary-pink: #E91E63;
+            --secondary-pink: #F06292;
+            --light-pink: #FCE4EC;
+            --dark-pink: #AD1457;
+            --accent-gold: #FFD700;
+            --bg-primary: #FAFAFA;
+            --bg-secondary: #FFFFFF;
+            --text-primary: #2D2D2D;
+            --text-secondary: #666666;
+            --text-light: #FFFFFF;
+            --border-color: #E0E0E0;
+            --shadow: 0 2px 10px rgba(233, 30, 99, 0.1);
+            --hover-bg: rgba(233, 30, 99, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-pink), var(--secondary-pink));
+            color: var(--text-light);
+            padding: 1rem 2rem;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            width: 50px;
+            height: 50px;
+            background: var(--text-light);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-pink);
+            font-size: 1.5rem;
+        }
+
+        .logo-text h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        .logo-text p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .main-container {
+            display: flex;
+            min-height: calc(100vh - 80px);
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--bg-secondary);
+            box-shadow: var(--shadow);
+            padding: 2rem 0;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-link:hover,
+        .sidebar-link.active {
+            background: var(--hover-bg);
+            color: var(--primary-pink);
+            border-left-color: var(--primary-pink);
+        }
+
+        .sidebar-link i {
+            width: 20px;
+            text-align: center;
+        }
+
+        .content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .page {
+            display: block;
+        }
+
+        .page.hidden {
+            display: none;
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            color: var(--primary-pink);
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            background: var(--primary-pink);
+            color: var(--text-light);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--dark-pink);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-pink);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--primary-pink);
+            border: 2px solid var(--primary-pink);
+        }
+
+        .btn-outline:hover {
+            background: var(--primary-pink);
+            color: var(--text-light);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--primary-pink), var(--secondary-pink));
+            color: var(--text-light);
+            padding: 2rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .table th,
+        .table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .table th {
+            background: var(--light-pink);
+            color: var(--primary-pink);
+            font-weight: 600;
+        }
+
+        .table tr:hover {
+            background: var(--hover-bg);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .modal-title {
+            color: var(--primary-pink);
+            font-size: 1.5rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary-pink);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: var(--primary-pink);
+            color: var(--text-light);
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            z-index: 1001;
+            animation: slideIn 0.3s ease;
+        }
+
+        .notification.success {
+            background: #4CAF50;
+        }
+
+        .notification.error {
+            background: #F44336;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                order: 2;
+            }
+            
+            .content {
+                order: 1;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Calendário Styles */
+        .calendar-container {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .calendar-nav-btn {
+            background: var(--primary-pink);
+            color: var(--text-light);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .calendar-nav-btn:hover {
+            background: var(--dark-pink);
+            transform: scale(1.1);
+        }
+
+        .calendar-title {
+            color: var(--primary-pink);
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .calendar-grid {
+            width: 100%;
+        }
+
+        .calendar-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            margin-bottom: 1rem;
+        }
+
+        .weekday {
+            background: var(--light-pink);
+            color: var(--primary-pink);
+            padding: 1rem;
+            text-align: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .calendar-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background: var(--border-color);
+        }
+
+        .calendar-day {
+            background: var(--bg-secondary);
+            min-height: 100px;
+            padding: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            border: 2px solid transparent;
+        }
+
+        .calendar-day:hover {
+            background: var(--hover-bg);
+            border-color: var(--primary-pink);
+        }
+
+        .calendar-day.other-month {
+            background: #f8f8f8;
+            color: #ccc;
+        }
+
+        .calendar-day.today {
+            background: var(--light-pink);
+            border-color: var(--primary-pink);
+        }
+
+        .calendar-day.selected {
+            background: var(--primary-pink);
+            color: var(--text-light);
+        }
+
+        .day-number {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .day-appointments {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .appointment-dot {
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            font-size: 0.7rem;
+        }
+
+        .appointment-dot.agendado {
+            background: #FFC107;
+        }
+
+        .appointment-dot.confirmado {
+            background: #2196F3;
+        }
+
+        .appointment-dot.concluido {
+            background: #4CAF50;
+        }
+
+        .appointment-dot.cancelado {
+            background: #F44336;
+        }
+
+        .calendar-legend {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        .legend-color.agendado {
+            background: #FFC107;
+        }
+
+        .legend-color.confirmado {
+            background: #2196F3;
+        }
+
+        .legend-color.concluido {
+            background: #4CAF50;
+        }
+
+        .legend-color.cancelado {
+            background: #F44336;
+        }
+
+        @media (max-width: 768px) {
+            .calendar-container {
+                padding: 1rem;
+            }
+            
+            .calendar-day {
+                min-height: 80px;
+                padding: 0.25rem;
+            }
+            
+            .calendar-legend {
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-spa"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>Fabiane Procópio</h1>
+                    <p>Estética & Bem-estar</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <aside class="sidebar">
+            <ul class="sidebar-menu">
+                <li class="sidebar-item">
+                    <a href="#" class="sidebar-link nav-link active" data-page="dashboard">
+                        <i class="fas fa-chart-pie"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#" class="sidebar-link nav-link" data-page="clientes">
+                        <i class="fas fa-users"></i>
+                        <span>Clientes</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#" class="sidebar-link nav-link" data-page="calendario">
+                        <i class="fas fa-calendar"></i>
+                        <span>Calendário</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#" class="sidebar-link nav-link" data-page="agendamentos">
+                        <i class="fas fa-list"></i>
+                        <span>Lista de Agendamentos</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#" class="sidebar-link nav-link" data-page="servicos">
+                        <i class="fas fa-spa"></i>
+                        <span>Serviços</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#" class="sidebar-link nav-link" data-page="produtos">
+                        <i class="fas fa-boxes"></i>
+                        <span>Produtos</span>
+                    </a>
+                </li>
+                <li class="sidebar-item">
+                    <a href="#" class="sidebar-link nav-link" data-page="relatorios">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>Relatórios</span>
+                    </a>
+                </li>
+            </ul>
+        </aside>
+
+        <main class="content">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page">
+                <div class="page-header">
+                    <h1 class="page-title">Dashboard</h1>
+                    <p class="page-subtitle">Visão geral do seu negócio</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-number" id="total-clientes">0</div>
+                        <div class="stat-label">Total de Clientes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div class="stat-number" id="agendamentos-hoje">0</div>
+                        <div class="stat-label">Agendamentos Hoje</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <div class="stat-number" id="receita-mes">R$ 0</div>
+                        <div class="stat-label">Receita do Mês</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-spa"></i>
+                        </div>
+                        <div class="stat-number" id="servicos-realizados">0</div>
+                        <div class="stat-label">Serviços Realizados</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-bottom: 1rem; color: var(--primary-pink);">
+                        <i class="fas fa-calendar-alt"></i> Próximos Agendamentos
+                    </h3>
+                    <div id="proximos-agendamentos">
+                        <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                            Nenhum agendamento para hoje
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clientes Page -->
+            <div id="clientes-page" class="page hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Clientes</h1>
+                    <p class="page-subtitle">Gerencie sua carteira de clientes</p>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <button class="btn btn-primary" onclick="openModal('cliente-modal')">
+                        <i class="fas fa-plus"></i> Nova Cliente
+                    </button>
+                </div>
+
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Telefone</th>
+                                <th>Email</th>
+                                <th>Último Atendimento</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clientes-table">
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                    Nenhuma cliente cadastrada
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Calendário Page -->
+            <div id="calendario-page" class="page hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Calendário</h1>
+                    <p class="page-subtitle">Visualize e gerencie seus agendamentos</p>
+                </div>
+
+                <div class="calendar-container">
+                    <div class="calendar-header">
+                        <button class="calendar-nav-btn" id="prev-month">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <h2 class="calendar-title" id="calendar-title">Janeiro 2024</h2>
+                        <button class="calendar-nav-btn" id="next-month">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="calendar-grid">
+                        <div class="calendar-weekdays">
+                            <div class="weekday">Dom</div>
+                            <div class="weekday">Seg</div>
+                            <div class="weekday">Ter</div>
+                            <div class="weekday">Qua</div>
+                            <div class="weekday">Qui</div>
+                            <div class="weekday">Sex</div>
+                            <div class="weekday">Sáb</div>
+                        </div>
+                        <div class="calendar-days" id="calendar-days">
+                            <!-- Dias serão gerados pelo JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="calendar-legend">
+                    <div class="legend-item">
+                        <div class="legend-color agendado"></div>
+                        <span>Agendado</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color confirmado"></div>
+                        <span>Confirmado</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color concluido"></div>
+                        <span>Concluído</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color cancelado"></div>
+                        <span>Cancelado</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Agendamentos Page -->
+            <div id="agendamentos-page" class="page hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Agendamentos</h1>
+                    <p class="page-subtitle">Gerencie os agendamentos dos seus serviços</p>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <button class="btn btn-primary" onclick="openModal('agendamento-modal')">
+                        <i class="fas fa-plus"></i> Novo Agendamento
+                    </button>
+                </div>
+
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Data/Hora</th>
+                                <th>Cliente</th>
+                                <th>Serviço</th>
+                                <th>Status</th>
+                                <th>Valor</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="agendamentos-table">
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                    Nenhum agendamento cadastrado
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Serviços Page -->
+            <div id="servicos-page" class="page hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Serviços</h1>
+                    <p class="page-subtitle">Gerencie os serviços oferecidos</p>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <button class="btn btn-primary" onclick="openModal('servico-modal')">
+                        <i class="fas fa-plus"></i> Novo Serviço
+                    </button>
+                </div>
+
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Categoria</th>
+                                <th>Duração</th>
+                                <th>Preço</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="servicos-table">
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                    Carregando serviços...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Produtos Page -->
+            <div id="produtos-page" class="page hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Produtos</h1>
+                    <p class="page-subtitle">Controle de estoque e produtos</p>
+                </div>
+
+                <div style="margin-bottom: 2rem;">
+                    <button class="btn btn-primary" onclick="openModal('produto-modal')">
+                        <i class="fas fa-plus"></i> Novo Produto
+                    </button>
+                </div>
+
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Categoria</th>
+                                <th>Quantidade</th>
+                                <th>Preço Unit.</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="produtos-table">
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                    Nenhum produto cadastrado
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Relatórios Page -->
+            <div id="relatorios-page" class="page hidden">
+                <div class="page-header">
+                    <h1 class="page-title">Relatórios</h1>
+                    <p class="page-subtitle">Análise do desempenho do seu negócio</p>
+                </div>
+
+                <div class="card" style="margin-bottom: 2rem;">
+                    <h3 style="margin-bottom: 1rem; color: var(--primary-pink);">Exportar Dados</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        Exporte os dados do sistema em formato Excel para análise externa
+                    </p>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="exportRelatoriGeral()">
+                            <i class="fas fa-file-excel"></i>
+                            Relatório Geral (XLSX)
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportRelatorioDetalhado()">
+                            <i class="fas fa-file-excel"></i>
+                            Relatório Detalhado (XLSX)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-number" id="relatorio-clientes">0</div>
+                        <div class="stat-label">Total de Clientes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div class="stat-number" id="relatorio-agendamentos">0</div>
+                        <div class="stat-label">Agendamentos Realizados</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-spa"></i>
+                        </div>
+                        <div class="stat-number" id="relatorio-servicos">0</div>
+                        <div class="stat-label">Serviços Ativos</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-boxes"></i>
+                        </div>
+                        <div class="stat-number" id="relatorio-produtos">0</div>
+                        <div class="stat-label">Produtos em Estoque</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Cliente -->
+    <div id="cliente-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Nova Cliente</h2>
+                <button class="close-btn" onclick="closeModal('cliente-modal')">&times;</button>
+            </div>
+            <form id="cliente-form">
+                <div class="form-group">
+                    <label class="form-label">Nome Completo</label>
+                    <input type="text" class="form-input" name="nome" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Telefone</label>
+                    <input type="tel" class="form-input" name="telefone" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" name="email">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Data de Nascimento</label>
+                    <input type="date" class="form-input" name="dataNascimento">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Endereço</label>
+                    <textarea class="form-textarea" name="endereco" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observações</label>
+                    <textarea class="form-textarea" name="observacoes" rows="3" placeholder="Alergias, preferências, histórico..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Salvar Cliente
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Agendamento -->
+    <div id="agendamento-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Novo Agendamento</h2>
+                <button class="close-btn" onclick="closeModal('agendamento-modal')">&times;</button>
+            </div>
+            <form id="agendamento-form">
+                <div class="form-group">
+                    <label class="form-label">Cliente</label>
+                    <select class="form-select" name="clienteId" required>
+                        <option value="">Selecione uma cliente</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Serviço</label>
+                    <select class="form-select" name="servicoId" required>
+                        <option value="">Selecione um serviço</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Data</label>
+                    <input type="date" class="form-input" name="data" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Horário</label>
+                    <input type="time" class="form-input" name="horario" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observações</label>
+                    <textarea class="form-textarea" name="observacoes" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-calendar-plus"></i> Agendar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Serviço -->
+    <div id="servico-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Novo Serviço</h2>
+                <button class="close-btn" onclick="closeModal('servico-modal')">&times;</button>
+            </div>
+            <form id="servico-form">
+                <div class="form-group">
+                    <label class="form-label">Nome do Serviço</label>
+                    <select class="form-select" name="nome" required>
+                        <option value="">Selecione um serviço</option>
+                        <option value="Método Joana Medrado 2.0">Método Joana Medrado 2.0</option>
+                        <option value="Estética Cosmetológica">Estética Cosmetológica</option>
+                        <option value="Flaciall">Flaciall</option>
+                        <option value="P.O 360 JM/Kinésio">P.O 360 JM/Kinésio</option>
+                        <option value="Limpeza de Pele">Limpeza de Pele</option>
+                        <option value="Drenagem Linfática">Drenagem Linfática</option>
+                        <option value="Massagem Relax">Massagem Relax</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Categoria</label>
+                    <select class="form-select" name="categoria" required>
+                        <option value="">Selecione uma categoria</option>
+                        <option value="Facial">Facial</option>
+                        <option value="Corporal">Corporal</option>
+                        <option value="Estética Avançada">Estética Avançada</option>
+                        <option value="Relaxamento">Relaxamento</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Duração (minutos)</label>
+                    <input type="number" class="form-input" name="duracao" min="15" max="240" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Preço (R$)</label>
+                    <input type="number" class="form-input" name="preco" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Descrição</label>
+                    <textarea class="form-textarea" name="descricao" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Salvar Serviço
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Produto -->
+    <div id="produto-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Novo Produto</h2>
+                <button class="close-btn" onclick="closeModal('produto-modal')">&times;</button>
+            </div>
+            <form id="produto-form">
+                <div class="form-group">
+                    <label class="form-label">Nome do Produto</label>
+                    <input type="text" class="form-input" name="nome" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Categoria</label>
+                    <select class="form-select" name="categoria" required>
+                        <option value="">Selecione uma categoria</option>
+                        <option value="Cosméticos">Cosméticos</option>
+                        <option value="Equipamentos">Equipamentos</option>
+                        <option value="Descartáveis">Descartáveis</option>
+                        <option value="Limpeza">Limpeza</option>
+                        <option value="Tratamento">Tratamento</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Quantidade em Estoque</label>
+                    <input type="number" class="form-input" name="quantidade" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estoque Mínimo</label>
+                    <input type="number" class="form-input" name="estoqueMinimo" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Preço Unitário (R$)</label>
+                    <input type="number" class="form-input" name="preco" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Descrição</label>
+                    <textarea class="form-textarea" name="descricao" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Salvar Produto
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
