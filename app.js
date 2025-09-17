@@ -1,83 +1,465 @@
 // Sistema Estética Fabiane Procópio - Gestão Completa
-// Armazenamento local usando localStorage
+// Integração com API PostgreSQL no Render
+
+// Configurações
+const config = {
+    api: {
+        baseUrl: 'https://estetica-fabiane-api.onrender.com/api',
+        timeout: 30000
+    },
+    app: {
+        name: 'Estética Fabiane Procópio',
+        version: '2.0.0',
+        description: 'Sistema de Gestão para Estética Facial e Corporal'
+    },
+    development: {
+        useLocalStorageFallback: true,
+        enableDebugLogs: true
+    }
+};
+
+// =====================================================
+// CAMADA DE COMUNICAÇÃO COM A API
+// =====================================================
+class ApiService {
+    constructor() {
+        this.baseUrl = config.api.baseUrl;
+        this.timeout = config.api.timeout;
+    }
+
+    async makeRequest(endpoint, options = {}) {
+        const url = `${this.baseUrl}${endpoint}`;
+        
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            timeout: this.timeout
+        };
+
+        const requestOptions = { ...defaultOptions, ...options };
+
+        try {
+            console.log(`🌐 Fazendo requisição para: ${url}`);
+            const response = await fetch(url, requestOptions);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log(`✅ Resposta recebida:`, data);
+            return data;
+        } catch (error) {
+            console.error(`❌ Erro na requisição para ${endpoint}:`, error);
+            
+            // Fallback para localStorage se API não estiver disponível
+            if (config.development.useLocalStorageFallback) {
+                console.warn('⚠️ API indisponível, usando localStorage como fallback');
+                return this.handleLocalStorageFallback(endpoint, options);
+            }
+            
+            throw error;
+        }
+    }
+
+    handleLocalStorageFallback(endpoint, options) {
+        const method = options.method || 'GET';
+        
+        if (endpoint.includes('/clients')) {
+            return this.handleClientsFallback(method, options, endpoint);
+        } else if (endpoint.includes('/services')) {
+            return this.handleServicesFallback(method, options, endpoint);
+        } else if (endpoint.includes('/appointments')) {
+            return this.handleAppointmentsFallback(method, options, endpoint);
+        } else if (endpoint.includes('/products')) {
+            return this.handleProductsFallback(method, options, endpoint);
+        }
+        
+        return { data: [], error: 'Endpoint não suportado no fallback' };
+    }
+
+    // Fallbacks para localStorage
+    handleClientsFallback(method, options, endpoint) {
+        const clientes = JSON.parse(localStorage.getItem('fabiane_clientes') || '[]');
+        
+        if (method === 'GET') {
+            return { data: clientes };
+        } else if (method === 'POST') {
+            const novoCliente = JSON.parse(options.body);
+            novoCliente.id = Date.now();
+            clientes.push(novoCliente);
+            localStorage.setItem('fabiane_clientes', JSON.stringify(clientes));
+            return { data: novoCliente };
+        }
+        
+        return { data: clientes };
+    }
+
+    handleServicesFallback(method, options, endpoint) {
+        const servicos = JSON.parse(localStorage.getItem('fabiane_servicos') || '[]');
+        
+        if (method === 'GET') {
+            return { data: servicos };
+        }
+        
+        return { data: servicos };
+    }
+
+    handleAppointmentsFallback(method, options, endpoint) {
+        const agendamentos = JSON.parse(localStorage.getItem('fabiane_agendamentos') || '[]');
+        
+        if (method === 'GET') {
+            return { data: agendamentos };
+        } else if (method === 'POST') {
+            const novoAgendamento = JSON.parse(options.body);
+            novoAgendamento.id = Date.now();
+            agendamentos.push(novoAgendamento);
+            localStorage.setItem('fabiane_agendamentos', JSON.stringify(agendamentos));
+            return { data: novoAgendamento };
+        }
+        
+        return { data: agendamentos };
+    }
+
+    handleProductsFallback(method, options, endpoint) {
+        const produtos = JSON.parse(localStorage.getItem('fabiane_produtos') || '[]');
+        
+        if (method === 'GET') {
+            return { data: produtos };
+        } else if (method === 'POST') {
+            const novoProduto = JSON.parse(options.body);
+            novoProduto.id = Date.now();
+            produtos.push(novoProduto);
+            localStorage.setItem('fabiane_produtos', JSON.stringify(produtos));
+            return { data: novoProduto };
+        }
+        
+        return { data: produtos };
+    }
+
+    // =====================================================
+    // MÉTODOS PARA CLIENTES
+    // =====================================================
+    async getClientes() {
+        return await this.makeRequest('/clients');
+    }
+
+    async createCliente(cliente) {
+        return await this.makeRequest('/clients', {
+            method: 'POST',
+            body: JSON.stringify(cliente)
+        });
+    }
+
+    async updateCliente(id, updates) {
+        return await this.makeRequest(`/clients/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates)
+        });
+    }
+
+    async deleteCliente(id) {
+        return await this.makeRequest(`/clients/${id}`, {
+            method: 'DELETE'
+        });
+    }
+
+    // =====================================================
+    // MÉTODOS PARA SERVIÇOS
+    // =====================================================
+    async getServicos() {
+        return await this.makeRequest('/services');
+    }
+
+    async createServico(servico) {
+        return await this.makeRequest('/services', {
+            method: 'POST',
+            body: JSON.stringify(servico)
+        });
+    }
+
+    async updateServico(id, updates) {
+        return await this.makeRequest(`/services/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates)
+        });
+    }
+
+    async deleteServico(id) {
+        return await this.makeRequest(`/services/${id}`, {
+            method: 'DELETE'
+        });
+    }
+
+    // =====================================================
+    // MÉTODOS PARA AGENDAMENTOS
+    // =====================================================
+    async getAgendamentos() {
+        return await this.makeRequest('/appointments');
+    }
+
+    async createAgendamento(agendamento) {
+        return await this.makeRequest('/appointments', {
+            method: 'POST',
+            body: JSON.stringify(agendamento)
+        });
+    }
+
+    async updateAgendamento(id, updates) {
+        return await this.makeRequest(`/appointments/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates)
+        });
+    }
+
+    async deleteAgendamento(id) {
+        return await this.makeRequest(`/appointments/${id}`, {
+            method: 'DELETE'
+        });
+    }
+
+    // =====================================================
+    // MÉTODOS PARA PRODUTOS
+    // =====================================================
+    async getProdutos() {
+        return await this.makeRequest('/products');
+    }
+
+    async createProduto(produto) {
+        return await this.makeRequest('/products', {
+            method: 'POST',
+            body: JSON.stringify(produto)
+        });
+    }
+
+    async updateProduto(id, updates) {
+        return await this.makeRequest(`/products/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(updates)
+        });
+    }
+
+    async deleteProduto(id) {
+        return await this.makeRequest(`/products/${id}`, {
+            method: 'DELETE'
+        });
+    }
+}
+
+// Instância global do serviço de API
+const apiService = new ApiService();
 
 class EsteticaFabianeSystem {
     constructor() {
         this.currentPage = 'dashboard';
+        this.loading = false;
         this.init();
     }
 
-    init() {
-        this.loadInitialData();
-        this.updateDashboard();
-        this.renderClientes();
-        this.renderServicos();
-        this.renderProdutos();
-        this.renderAgendamentos();
-        this.updateRelatorios();
-        this.setupEventListeners();
+    async init() {
+        try {
+            this.showLoading(true);
+            console.log('🚀 Inicializando Sistema Estética Fabiane...');
+            
+            // Carrega os dados da API
+            await this.loadInitialData();
+            
+            // Atualiza a interface
+            await this.updateDashboard();
+            await this.renderClientes();
+            await this.renderServicos();
+            await this.renderProdutos();
+            await this.renderAgendamentos();
+            await this.updateRelatorios();
+            
+            this.setupEventListeners();
+            this.setupNavigation();
+            console.log('✅ Sistema inicializado com sucesso!');
+        } catch (error) {
+            console.error('❌ Erro ao inicializar o sistema:', error);
+            this.showNotification('Erro ao carregar os dados. Tente recarregar a página.', 'error');
+        } finally {
+            this.showLoading(false);
+        }
     }
 
     // ===== GERENCIAMENTO DE DADOS =====
     
     // Clientes
-    getClientes() {
-        return JSON.parse(localStorage.getItem('fabiane_clientes') || '[]');
-    }
-
-    saveClientes(clientes) {
-        localStorage.setItem('fabiane_clientes', JSON.stringify(clientes));
-    }
-
-    addCliente(cliente) {
-        const clientes = this.getClientes();
-        cliente.id = Date.now().toString();
-        cliente.createdAt = new Date().toISOString();
-        clientes.push(cliente);
-        this.saveClientes(clientes);
-        return cliente;
-    }
-
-    updateCliente(id, updates) {
-        const clientes = this.getClientes();
-        const index = clientes.findIndex(c => c.id === id);
-        if (index !== -1) {
-            clientes[index] = { ...clientes[index], ...updates };
-            this.saveClientes(clientes);
+    async getClientes() {
+        try {
+            const response = await apiService.getClientes();
+            return response.data || [];
+        } catch (error) {
+            console.error('Erro ao carregar clientes:', error);
+            return JSON.parse(localStorage.getItem('fabiane_clientes') || '[]');
         }
     }
 
-    deleteCliente(id) {
-        const clientes = this.getClientes();
-        const filtered = clientes.filter(c => c.id !== id);
-        this.saveClientes(filtered);
+    async addCliente(cliente) {
+        try {
+            this.showLoading(true);
+            const response = await apiService.createCliente(cliente);
+            this.showNotification('Cliente adicionado com sucesso!', 'success');
+            await this.renderClientes();
+            await this.updateDashboard();
+            return response.data;
+        } catch (error) {
+            console.error('Erro ao adicionar cliente:', error);
+            this.showNotification('Erro ao adicionar cliente', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async updateCliente(id, updates) {
+        try {
+            this.showLoading(true);
+            await apiService.updateCliente(id, updates);
+            this.showNotification('Cliente atualizado com sucesso!', 'success');
+            await this.renderClientes();
+            await this.updateDashboard();
+        } catch (error) {
+            console.error('Erro ao atualizar cliente:', error);
+            this.showNotification('Erro ao atualizar cliente', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async deleteCliente(id) {
+        try {
+            this.showLoading(true);
+            await apiService.deleteCliente(id);
+            this.showNotification('Cliente removido com sucesso!', 'success');
+            await this.renderClientes();
+            await this.updateDashboard();
+        } catch (error) {
+            console.error('Erro ao remover cliente:', error);
+            this.showNotification('Erro ao remover cliente', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
     }
 
     // Serviços
-    getServicos() {
-        return JSON.parse(localStorage.getItem('fabiane_servicos') || '[]');
+    async getServicos() {
+        try {
+            const response = await apiService.getServicos();
+            return response.data || [];
+        } catch (error) {
+            console.error('Erro ao carregar serviços:', error);
+            return JSON.parse(localStorage.getItem('fabiane_servicos') || '[]');
+        }
     }
 
-    saveServicos(servicos) {
-        localStorage.setItem('fabiane_servicos', JSON.stringify(servicos));
+    async addServico(servico) {
+        try {
+            this.showLoading(true);
+            const response = await apiService.createServico(servico);
+            this.showNotification('Serviço adicionado com sucesso!', 'success');
+            await this.renderServicos();
+            return response.data;
+        } catch (error) {
+            console.error('Erro ao adicionar serviço:', error);
+            this.showNotification('Erro ao adicionar serviço', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
     }
 
-    addServico(servico) {
-        const servicos = this.getServicos();
-        servico.id = Date.now().toString();
-        servico.createdAt = new Date().toISOString();
-        servico.active = true;
-        servicos.push(servico);
-        this.saveServicos(servicos);
-        return servico;
+    async updateServico(id, updates) {
+        try {
+            this.showLoading(true);
+            await apiService.updateServico(id, updates);
+            this.showNotification('Serviço atualizado com sucesso!', 'success');
+            await this.renderServicos();
+        } catch (error) {
+            console.error('Erro ao atualizar serviço:', error);
+            this.showNotification('Erro ao atualizar serviço', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
     }
 
-    updateServico(id, updates) {
-        const servicos = this.getServicos();
-        const index = servicos.findIndex(s => s.id === id);
-        if (index !== -1) {
-            servicos[index] = { ...servicos[index], ...updates };
-            this.saveServicos(servicos);
+    async deleteServico(id) {
+        try {
+            this.showLoading(true);
+            await apiService.deleteServico(id);
+            this.showNotification('Serviço removido com sucesso!', 'success');
+            await this.renderServicos();
+        } catch (error) {
+            console.error('Erro ao remover serviço:', error);
+            this.showNotification('Erro ao remover serviço', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    // Produtos
+    async getProdutos() {
+        try {
+            const response = await apiService.getProdutos();
+            return response.data || [];
+        } catch (error) {
+            console.error('Erro ao carregar produtos:', error);
+            return JSON.parse(localStorage.getItem('fabiane_produtos') || '[]');
+        }
+    }
+
+    async addProduto(produto) {
+        try {
+            this.showLoading(true);
+            produto.createdAt = new Date().toISOString();
+            produto.estoqueAtual = produto.estoqueAtual || 0;
+            const response = await apiService.createProduto(produto);
+            const novoProduto = response.data;
+            this.showNotification('Produto adicionado com sucesso!', 'success');
+            await this.renderProdutos();
+            return novoProduto;
+        } catch (error) {
+            console.error('Erro ao adicionar produto:', error);
+            this.showNotification('Erro ao adicionar produto', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async updateProduto(id, updates) {
+        try {
+            this.showLoading(true);
+            await apiService.updateProduto(id, updates);
+            this.showNotification('Produto atualizado com sucesso!', 'success');
+            await this.renderProdutos();
+        } catch (error) {
+            console.error('Erro ao atualizar produto:', error);
+            this.showNotification('Erro ao atualizar produto', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async deleteProduto(id) {
+        try {
+            this.showLoading(true);
+            await apiService.deleteProduto(id);
+            this.showNotification('Produto removido com sucesso!', 'success');
+            await this.renderProdutos();
+        } catch (error) {
+            console.error('Erro ao remover produto:', error);
+            this.showNotification('Erro ao remover produto', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
         }
     }
 
@@ -88,37 +470,67 @@ class EsteticaFabianeSystem {
     }
 
     // Agendamentos
-    getAgendamentos() {
-        return JSON.parse(localStorage.getItem('fabiane_agendamentos') || '[]');
-    }
-
-    saveAgendamentos(agendamentos) {
-        localStorage.setItem('fabiane_agendamentos', JSON.stringify(agendamentos));
-    }
-
-    addAgendamento(agendamento) {
-        const agendamentos = this.getAgendamentos();
-        agendamento.id = Date.now().toString();
-        agendamento.createdAt = new Date().toISOString();
-        agendamento.status = 'agendado';
-        agendamentos.push(agendamento);
-        this.saveAgendamentos(agendamentos);
-        return agendamento;
-    }
-
-    updateAgendamento(id, updates) {
-        const agendamentos = this.getAgendamentos();
-        const index = agendamentos.findIndex(a => a.id === id);
-        if (index !== -1) {
-            agendamentos[index] = { ...agendamentos[index], ...updates };
-            this.saveAgendamentos(agendamentos);
+    async getAgendamentos() {
+        try {
+            const response = await apiService.getAgendamentos();
+            return response.data || [];
+        } catch (error) {
+            console.error('Erro ao buscar agendamentos:', error);
+            this.showNotification('Erro ao carregar agendamentos', 'error');
+            return [];
         }
     }
 
-    deleteAgendamento(id) {
-        const agendamentos = this.getAgendamentos();
-        const filtered = agendamentos.filter(a => a.id !== id);
-        this.saveAgendamentos(filtered);
+    async addAgendamento(agendamento) {
+        try {
+            this.showLoading(true);
+            agendamento.createdAt = new Date().toISOString();
+            agendamento.status = 'agendado';
+            const response = await apiService.createAgendamento(agendamento);
+            const novoAgendamento = response.data;
+            this.showNotification('Agendamento realizado com sucesso!', 'success');
+            await this.renderAgendamentos();
+            await this.updateDashboard();
+            return novoAgendamento;
+        } catch (error) {
+            console.error('Erro ao adicionar agendamento:', error);
+            this.showNotification('Erro ao adicionar agendamento', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async updateAgendamento(id, updates) {
+        try {
+            this.showLoading(true);
+            await apiService.updateAgendamento(id, updates);
+            this.showNotification('Agendamento atualizado com sucesso!', 'success');
+            await this.renderAgendamentos();
+            await this.updateDashboard();
+        } catch (error) {
+            console.error('Erro ao atualizar agendamento:', error);
+            this.showNotification('Erro ao atualizar agendamento', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    async deleteAgendamento(id) {
+        try {
+            this.showLoading(true);
+            await apiService.deleteAgendamento(id);
+            this.showNotification('Agendamento removido com sucesso!', 'success');
+            await this.renderAgendamentos();
+            await this.updateDashboard();
+        } catch (error) {
+            console.error('Erro ao remover agendamento:', error);
+            this.showNotification('Erro ao remover agendamento', 'error');
+            throw error;
+        } finally {
+            this.showLoading(false);
+        }
     }
 
     // Produtos
@@ -156,8 +568,8 @@ class EsteticaFabianeSystem {
 
     // ===== RENDERIZAÇÃO =====
 
-    renderClientes() {
-        const clientes = this.getClientes();
+    async renderClientes() {
+        const clientes = await this.getClientes();
         const tbody = document.getElementById('clientes-table');
 
         if (clientes.length === 0) {
@@ -369,10 +781,10 @@ class EsteticaFabianeSystem {
 
     // ===== DASHBOARD =====
 
-    updateDashboard() {
-        const clientes = this.getClientes();
-        const agendamentos = this.getAgendamentos();
-        const servicos = this.getServicos();
+    async updateDashboard() {
+        const clientes = await this.getClientes();
+        const agendamentos = await this.getAgendamentos();
+        const servicos = await this.getServicos();
         
         // Agendamentos de hoje
         const hoje = new Date().toISOString().split('T')[0];
@@ -450,11 +862,11 @@ class EsteticaFabianeSystem {
         }).join('');
     }
 
-    updateRelatorios() {
-        const clientes = this.getClientes();
-        const agendamentos = this.getAgendamentos();
-        const servicos = this.getServicos();
-        const produtos = this.getProdutos();
+    async updateRelatorios() {
+        const clientes = await this.getClientes();
+        const agendamentos = await this.getAgendamentos();
+        const servicos = await this.getServicos();
+        const produtos = await this.getProdutos();
 
         document.getElementById('relatorio-clientes').textContent = clientes.length;
         document.getElementById('relatorio-agendamentos').textContent = agendamentos.filter(a => a.status === 'realizado').length;
@@ -464,10 +876,12 @@ class EsteticaFabianeSystem {
 
     // ===== NAVEGAÇÃO =====
 
-    showPage(pageId) {
+    async showPage(pageId) {
+        console.log(`📄 Navegando para página: ${pageId}`);
+        
         // Esconder todas as páginas
         document.querySelectorAll('.page').forEach(page => {
-            page.classList.remove('active');
+            page.classList.add('hidden');
         });
 
         // Remover classe active de todos os links
@@ -476,18 +890,30 @@ class EsteticaFabianeSystem {
         });
 
         // Mostrar página selecionada
-        document.getElementById(pageId + '-page').classList.add('active');
+        const targetPage = document.getElementById(pageId + '-page');
+        if (targetPage) {
+            targetPage.classList.remove('hidden');
+            console.log(`✅ Página ${pageId} ativada`);
+        } else {
+            console.error(`❌ Página ${pageId}-page não encontrada`);
+        }
         
         // Adicionar classe active ao link correspondente
-        event.target.classList.add('active');
+        const targetLink = document.querySelector(`[data-page="${pageId}"]`);
+        if (targetLink) {
+            targetLink.classList.add('active');
+        }
+
+        // Atualizar página atual
+        this.currentPage = pageId;
 
         // Atualizar dados baseado na página
         switch(pageId) {
             case 'dashboard':
-                this.updateDashboard();
+                await this.updateDashboard();
                 break;
             case 'clientes':
-                this.renderClientes();
+                await this.renderClientes();
                 this.updateClienteSelect();
                 break;
             case 'agendamentos':
@@ -567,24 +993,6 @@ class EsteticaFabianeSystem {
                 link.classList.add('active');
             });
         });
-    }
-    
-    showPage(pageId) {
-        // Esconder todas as páginas
-        const pages = document.querySelectorAll('.page');
-        pages.forEach(page => page.classList.add('hidden'));
-        
-        // Mostrar página selecionada
-        const targetPage = document.getElementById(`${pageId}-page`);
-        if (targetPage) {
-            targetPage.classList.remove('hidden');
-            this.currentPage = pageId;
-            
-            // Se for calendário, renderizar
-            if (pageId === 'calendario') {
-                this.renderCalendar();
-            }
-        }
     }
 
     // ===== CALENDÁRIO =====
@@ -781,7 +1189,37 @@ class EsteticaFabianeSystem {
         });
     }
 
-    // ===== NOTIFICAÇÕES =====
+    // ===== NOTIFICAÇÕES E LOADING =====
+
+    showLoading(show = true) {
+        const loadingElement = document.getElementById('loading');
+        if (loadingElement) {
+            loadingElement.style.display = show ? 'flex' : 'none';
+        } else if (show) {
+            // Criar elemento de loading se não existir
+            const loading = document.createElement('div');
+            loading.id = 'loading';
+            loading.innerHTML = `
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>Carregando...</p>
+                </div>
+            `;
+            loading.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 9999;
+            `;
+            document.body.appendChild(loading);
+        }
+    }
 
     showNotification(message, type = 'info') {
         const notification = document.createElement('div');
@@ -804,119 +1242,201 @@ class EsteticaFabianeSystem {
 
     // ===== DADOS INICIAIS =====
 
-    loadInitialData() {
-        if (this.getServicos().length === 0) {
-            this.initExampleData();
+    async loadInitialData() {
+        try {
+            // Verifica se já existem dados no banco de dados
+            const clientes = await this.getClientes();
+            if (clientes.length === 0) {
+                await this.initializeExampleData();
+            }
+        } catch (error) {
+            console.error('Erro ao carregar dados iniciais:', error);
+            this.showNotification('Erro ao carregar dados iniciais', 'error');
         }
     }
 
-    initExampleData() {
-        // Serviços específicos da Fabiane
-        const servicosExemplo = [
-            {
-                nome: 'Método Joana Medrado 2.0',
-                categoria: 'Estética Avançada',
-                duracao: 90,
-                preco: 180.00,
-                descricao: 'Método exclusivo de rejuvenescimento facial'
-            },
-            {
-                nome: 'Estética Cosmetológica',
-                categoria: 'Facial',
-                duracao: 60,
-                preco: 120.00,
-                descricao: 'Tratamento facial completo com cosméticos profissionais'
-            },
-            {
-                nome: 'Flaciall',
-                categoria: 'Facial',
-                duracao: 45,
-                preco: 100.00,
-                descricao: 'Tratamento para flacidez facial'
-            },
-            {
-                nome: 'P.O 360 JM/Kinésio',
-                categoria: 'Corporal',
-                duracao: 120,
-                preco: 200.00,
-                descricao: 'Protocolo completo de modelagem corporal'
-            },
-            {
-                nome: 'Limpeza de Pele',
-                categoria: 'Facial',
-                duracao: 60,
-                preco: 80.00,
-                descricao: 'Limpeza profunda da pele facial'
-            },
-            {
-                nome: 'Drenagem Linfática',
-                categoria: 'Corporal',
-                duracao: 60,
-                preco: 90.00,
-                descricao: 'Massagem para drenagem linfática'
-            },
-            {
-                nome: 'Massagem Relax',
-                categoria: 'Relaxamento',
-                duracao: 50,
-                preco: 70.00,
-                descricao: 'Massagem relaxante e terapêutica'
+    async initializeExampleData() {
+        try {
+            // Serviços específicos da Fabiane
+            const servicosExemplo = [
+                {
+                    nome: 'Método Joana Medrado 2.0',
+                    descricao: 'Método exclusivo de tratamento facial',
+                    categoria: 'Estética Avançada',
+                    duracao: 90,
+                    preco: 250.00,
+                    ativo: true
+                },
+                {
+                    nome: 'Estética Cosmetológica',
+                    descricao: 'Tratamento facial completo com cosméticos profissionais',
+                    categoria: 'Facial',
+                    duracao: 60,
+                    preco: 120.00,
+                    ativo: true
+                },
+                {
+                    nome: 'Flaciall',
+                    descricao: 'Técnica de harmonização facial',
+                    categoria: 'Estética Avançada',
+                    duracao: 90,
+                    preco: 200.00,
+                    ativo: true
+                },
+                {
+                    nome: 'P.O 360 JM/Kinésio',
+                    descricao: 'Pós-operatório com técnicas de drenagem linfática',
+                    categoria: 'Pós-operatório',
+                    duracao: 60,
+                    preco: 150.00,
+                    ativo: true
+                },
+                {
+                    nome: 'Limpeza de Pele',
+                    descricao: 'Limpeza profunda com extração de cravos e impurezas',
+                    categoria: 'Facial',
+                    duracao: 60,
+                    preco: 100.00,
+                    ativo: true
+                },
+                {
+                    nome: 'Drenagem Linfática',
+                    descricao: 'Massagem para redução de inchaço e retenção de líquidos',
+                    categoria: 'Corporal',
+                    duracao: 60,
+                    preco: 120.00,
+                    ativo: true
+                },
+                {
+                    nome: 'Massagem Relax',
+                    descricao: 'Massagem relaxante para alívio do estresse e tensões',
+                    categoria: 'Corporal',
+                    duracao: 60,
+                    preco: 100.00,
+                    ativo: true
+                }
+            ];
+
+            // Adicionar serviços ao banco de dados
+            for (const servico of servicosExemplo) {
+                await this.addServico(servico);
             }
-        ];
 
-        servicosExemplo.forEach(servico => this.addServico(servico));
+            // Clientes de exemplo
+            const clientesExemplo = [
+                {
+                    nome: 'Ana Paula Silva',
+                    telefone: '(11) 99999-1111',
+                    email: 'ana.paula@email.com',
+                    dataNascimento: '1985-03-15',
+                    endereco: 'Rua das Flores, 123 - Centro',
+                    observacoes: 'Pele sensível, evitar produtos com álcool',
+                    genero: 'Feminino'
+                },
+                {
+                    nome: 'Carlos Eduardo',
+                    telefone: '(11) 98888-2222',
+                    email: 'carlos.eduardo@email.com',
+                    dataNascimento: '1990-07-22',
+                    endereco: 'Av. Paulista, 1000 - Bela Vista',
+                    observacoes: 'Faz tratamento para acne',
+                    genero: 'Masculino'
+                }
+            ];
 
-        // Clientes de exemplo
-        const clientesExemplo = [
-            {
-                nome: 'Ana Paula Silva',
-                telefone: '(11) 99999-1111',
-                email: 'ana.paula@email.com',
-                dataNascimento: '1985-03-15',
-                endereco: 'Rua das Flores, 123 - Centro',
-                observacoes: 'Pele sensível, evitar produtos com álcool'
-            },
-            {
-                nome: 'Mariana Santos',
-                telefone: '(11) 88888-2222',
-                email: 'mariana.santos@email.com',
-                dataNascimento: '1990-07-22',
-                endereco: 'Av. Principal, 456 - Jardins',
-                observacoes: 'Cliente VIP, preferência por horários da manhã'
+            // Adicionar clientes ao banco de dados
+            for (const cliente of clientesExemplo) {
+                await this.addCliente(cliente);
             }
-        ];
 
-        clientesExemplo.forEach(cliente => this.addCliente(cliente));
+            // Exemplo de produtos
+            const produtosExemplo = [
+                {
+                    nome: 'Creme Hidratante Facial',
+                    descricao: 'Hidratante para pele seca',
+                    categoria: 'Cuidados com o Rosto',
+                    preco: 89.90,
+                    custo: 45.00,
+                    estoque: 15,
+                    estoqueMinimo: 5
+                },
+                {
+                    nome: 'Protetor Solar FPS 60',
+                    descricao: 'Proteção UVA/UVB',
+                    categoria: 'Proteção Solar',
+                    preco: 129.90,
+                    custo: 65.00,
+                    estoque: 20,
+                    estoqueMinimo: 10
+                }
+            ];
 
-        // Produtos de exemplo
-        const produtosExemplo = [
-            {
-                nome: 'Sérum Vitamina C',
-                categoria: 'Cosméticos',
-                quantidade: 15,
-                estoqueMinimo: 5,
-                preco: 89.90,
-                descricao: 'Sérum antioxidante para tratamento facial'
-            },
-            {
-                nome: 'Creme Hidratante Facial',
-                categoria: 'Cosméticos',
-                quantidade: 8,
-                estoqueMinimo: 10,
-                preco: 65.00,
-                descricao: 'Hidratante para todos os tipos de pele'
-            },
-            {
-                nome: 'Máscara de Argila',
-                categoria: 'Tratamento',
-                quantidade: 20,
-                estoqueMinimo: 8,
-                preco: 45.00,
-                descricao: 'Máscara purificante para peles oleosas'
+            // Adicionar produtos ao banco de dados
+            for (const produto of produtosExemplo) {
+                await this.addProduto(produto);
             }
-        ];
 
-        produtosExemplo.forEach(produto => this.addProduto(produto));
+            this.showNotification('Dados iniciais carregados com sucesso!', 'success');
+        } catch (error) {
+            console.error('Erro ao inicializar dados de exemplo:', error);
+            this.showNotification('Erro ao carregar dados iniciais', 'error');
+        }
+    }
+
+    // ===== FUNÇÕES PARA RELATÓRIOS =====
+
+    getDashboardStats() {
+        const clientes = this.getClientes();
+        const agendamentos = this.getAgendamentos();
+        const servicos = this.getServicos();
+        const produtos = this.getProdutos();
+        
+        // Calcular receita total dos agendamentos realizados
+        const receitaTotal = agendamentos
+            .filter(a => a.status === 'realizado')
+            .reduce((total, agendamento) => {
+                const servico = servicos.find(s => s.id === agendamento.servicoId);
+                return total + (servico ? servico.preco : 0);
+            }, 0);
+        
+        return {
+            totalClientes: clientes.length,
+            totalAgendamentos: agendamentos.length,
+            totalServicos: servicos.length,
+            totalProdutos: produtos.length,
+            receitaTotal: receitaTotal
+        };
+    }
+
+    getData(type) {
+        switch(type) {
+            case 'clientes':
+                return this.getClientes();
+            case 'agendamentos':
+                return this.getAgendamentos().map(agendamento => {
+                    const cliente = this.getClientes().find(c => c.id === agendamento.clienteId);
+                    const servico = this.getServicos().find(s => s.id === agendamento.servicoId);
+                    return {
+                        ...agendamento,
+                        cliente: cliente ? cliente.nome : 'Cliente não encontrado',
+                        servico: servico ? servico.nome : 'Serviço não encontrado'
+                    };
+                });
+            case 'servicos':
+                return this.getServicos();
+            case 'produtos':
+                return this.getProdutos().map(produto => ({
+                    ...produto,
+                    estoque: produto.quantidade,
+                    fornecedor: produto.fornecedor || 'Não informado'
+                }));
+            default:
+                return [];
+        }
+    }
+
+    async renderDashboard() {
+        await this.updateDashboard();
     }
 }
 
@@ -983,44 +1503,146 @@ function exportRelatoriGeral() {
         
         // Dados do dashboard
         const stats = esteticaFabiane.getDashboardStats();
+        const currentDate = new Date().toLocaleDateString('pt-BR');
+        const currentTime = new Date().toLocaleTimeString('pt-BR');
+        
         const dashboardData = [
-            ['Relatório Geral - Estética Fabiane Procópio'],
-            ['Data:', new Date().toLocaleDateString('pt-BR')],
+            ['🌸 ESTÉTICA FABIANE PROCÓPIO 🌸'],
+            ['Relatório Geral de Gestão'],
             [''],
-            ['ESTATÍSTICAS GERAIS'],
-            ['Total de Clientes:', stats.totalClientes],
-            ['Total de Agendamentos:', stats.totalAgendamentos],
-            ['Total de Serviços:', stats.totalServicos],
-            ['Total de Produtos:', stats.totalProdutos],
+            ['📅 Data de Geração:', currentDate],
+            ['⏰ Horário:', currentTime],
             [''],
-            ['RESUMO FINANCEIRO'],
-            ['Receita Total (Estimada):', 'R$ ' + stats.receitaTotal.toFixed(2)]
+            ['📊 ESTATÍSTICAS GERAIS'],
+            ['👥 Total de Clientes:', stats.totalClientes],
+            ['📅 Total de Agendamentos:', stats.totalAgendamentos],
+            ['💆‍♀️ Total de Serviços:', stats.totalServicos],
+            ['📦 Total de Produtos:', stats.totalProdutos],
+            [''],
+            ['💰 RESUMO FINANCEIRO'],
+            ['💵 Receita Total Realizada:', 'R$ ' + stats.receitaTotal.toFixed(2).replace('.', ',')],
+            [''],
+            ['🏢 Estética Fabiane Procópio - Beleza & Bem-estar'],
+            ['📱 Sistema de Gestão Integrado']
         ];
         
         const ws = XLSX.utils.aoa_to_sheet(dashboardData);
         
-        // Aplicar estilos
+        // Aplicar estilos personalizados
         const range = XLSX.utils.decode_range(ws['!ref']);
         for (let R = range.s.r; R <= range.e.r; ++R) {
             for (let C = range.s.c; C <= range.e.c; ++C) {
                 const cell_address = XLSX.utils.encode_cell({c: C, r: R});
                 if (!ws[cell_address]) continue;
                 
-                if (R === 0) { // Título
+                // Título principal
+                if (R === 0) {
                     ws[cell_address].s = {
-                        font: { bold: true, sz: 16, color: { rgb: "E91E63" } },
-                        alignment: { horizontal: "center" }
+                        font: { bold: true, sz: 18, color: { rgb: "FFFFFF" } },
+                        alignment: { horizontal: "center", vertical: "center" },
+                        fill: { fgColor: { rgb: "E91E63" } },
+                        border: {
+                            top: { style: "thick", color: { rgb: "AD1457" } },
+                            bottom: { style: "thick", color: { rgb: "AD1457" } },
+                            left: { style: "thick", color: { rgb: "AD1457" } },
+                            right: { style: "thick", color: { rgb: "AD1457" } }
+                        }
                     };
-                } else if (R === 3 || R === 9) { // Seções
+                }
+                // Subtítulo
+                else if (R === 1) {
+                    ws[cell_address].s = {
+                        font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } },
+                        alignment: { horizontal: "center", vertical: "center" },
+                        fill: { fgColor: { rgb: "F06292" } },
+                        border: {
+                            top: { style: "medium", color: { rgb: "E91E63" } },
+                            bottom: { style: "medium", color: { rgb: "E91E63" } },
+                            left: { style: "medium", color: { rgb: "E91E63" } },
+                            right: { style: "medium", color: { rgb: "E91E63" } }
+                        }
+                    };
+                }
+                // Seções (Estatísticas e Financeiro)
+                else if (R === 6 || R === 12) {
                     ws[cell_address].s = {
                         font: { bold: true, sz: 12, color: { rgb: "E91E63" } },
-                        fill: { fgColor: { rgb: "FCE4EC" } }
+                        alignment: { horizontal: "left", vertical: "center" },
+                        fill: { fgColor: { rgb: "FCE4EC" } },
+                        border: {
+                            top: { style: "medium", color: { rgb: "E91E63" } },
+                            bottom: { style: "medium", color: { rgb: "E91E63" } },
+                            left: { style: "medium", color: { rgb: "E91E63" } },
+                            right: { style: "medium", color: { rgb: "E91E63" } }
+                        }
                     };
+                }
+                // Dados
+                else if (R >= 7 && R <= 10 || R === 13) {
+                    ws[cell_address].s = {
+                        font: { sz: 11, color: { rgb: "2D2D2D" } },
+                        alignment: { horizontal: "left", vertical: "center" },
+                        fill: { fgColor: { rgb: "FFFFFF" } },
+                        border: {
+                            top: { style: "thin", color: { rgb: "E0E0E0" } },
+                            bottom: { style: "thin", color: { rgb: "E0E0E0" } },
+                            left: { style: "thin", color: { rgb: "E0E0E0" } },
+                            right: { style: "thin", color: { rgb: "E0E0E0" } }
+                        }
+                    };
+                    
+                    // Destacar valores numéricos
+                    if (C === 1 && (R >= 7 && R <= 10 || R === 13)) {
+                        ws[cell_address].s.font.bold = true;
+                        ws[cell_address].s.font.color = { rgb: "E91E63" };
+                    }
+                }
+                // Informações da empresa (rodapé)
+                else if (R >= 15) {
+                    ws[cell_address].s = {
+                        font: { italic: true, sz: 10, color: { rgb: "666666" } },
+                        alignment: { horizontal: "center", vertical: "center" },
+                        fill: { fgColor: { rgb: "F8F8F8" } }
+                    };
+                }
+                // Data e hora
+                else if (R === 3 || R === 4) {
+                    ws[cell_address].s = {
+                        font: { sz: 10, color: { rgb: "666666" } },
+                        alignment: { horizontal: "left", vertical: "center" }
+                    };
+                    
+                    if (C === 1) {
+                        ws[cell_address].s.font.bold = true;
+                        ws[cell_address].s.font.color = { rgb: "E91E63" };
+                    }
                 }
             }
         }
         
-        ws['!cols'] = [{ width: 30 }, { width: 20 }];
+        // Configurar larguras das colunas
+        ws['!cols'] = [{ width: 35 }, { width: 25 }];
+        
+        // Configurar altura das linhas
+        ws['!rows'] = [
+            { hpt: 25 }, // Título
+            { hpt: 20 }, // Subtítulo
+            { hpt: 15 }, // Espaço
+            { hpt: 15 }, // Data
+            { hpt: 15 }, // Hora
+            { hpt: 15 }, // Espaço
+            { hpt: 20 }, // Seção
+            { hpt: 18 }, // Dados
+            { hpt: 18 }, // Dados
+            { hpt: 18 }, // Dados
+            { hpt: 18 }, // Dados
+            { hpt: 15 }, // Espaço
+            { hpt: 20 }, // Seção
+            { hpt: 18 }, // Dados
+            { hpt: 15 }, // Espaço
+            { hpt: 15 }, // Rodapé
+            { hpt: 15 }  // Rodapé
+        ];
         
         XLSX.utils.book_append_sheet(wb, ws, "Relatório Geral");
         XLSX.writeFile(wb, `Relatorio_Geral_Estetica_Fabiane_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -1035,104 +1657,176 @@ function exportRelatoriGeral() {
 function exportRelatorioDetalhado() {
     try {
         const wb = XLSX.utils.book_new();
+        const currentDate = new Date().toLocaleDateString('pt-BR');
+        
+        // Função para aplicar estilos personalizados
+        function applyCustomStyles(ws, sheetTitle, iconEmoji) {
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cell_address = XLSX.utils.encode_cell({c: C, r: R});
+                    if (!ws[cell_address]) continue;
+                    
+                    // Título da planilha (linha 0)
+                    if (R === 0) {
+                        ws[cell_address].s = {
+                            font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+                            alignment: { horizontal: "center", vertical: "center" },
+                            fill: { fgColor: { rgb: "E91E63" } },
+                            border: {
+                                top: { style: "thick", color: { rgb: "AD1457" } },
+                                bottom: { style: "thick", color: { rgb: "AD1457" } },
+                                left: { style: "thick", color: { rgb: "AD1457" } },
+                                right: { style: "thick", color: { rgb: "AD1457" } }
+                            }
+                        };
+                    }
+                    // Cabeçalhos das colunas (linha 1)
+                    else if (R === 1) {
+                        ws[cell_address].s = {
+                            font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } },
+                            alignment: { horizontal: "center", vertical: "center" },
+                            fill: { fgColor: { rgb: "F06292" } },
+                            border: {
+                                top: { style: "medium", color: { rgb: "E91E63" } },
+                                bottom: { style: "medium", color: { rgb: "E91E63" } },
+                                left: { style: "thin", color: { rgb: "E91E63" } },
+                                right: { style: "thin", color: { rgb: "E91E63" } }
+                            }
+                        };
+                    }
+                    // Dados (linhas 2+)
+                    else if (R >= 2) {
+                        const isEvenRow = (R % 2 === 0);
+                        ws[cell_address].s = {
+                            font: { sz: 10, color: { rgb: "2D2D2D" } },
+                            alignment: { horizontal: "left", vertical: "center" },
+                            fill: { fgColor: { rgb: isEvenRow ? "FFFFFF" : "FCE4EC" } },
+                            border: {
+                                top: { style: "thin", color: { rgb: "E0E0E0" } },
+                                bottom: { style: "thin", color: { rgb: "E0E0E0" } },
+                                left: { style: "thin", color: { rgb: "E0E0E0" } },
+                                right: { style: "thin", color: { rgb: "E0E0E0" } }
+                            }
+                        };
+                        
+                        // Destacar valores monetários
+                        if (ws[cell_address].v && typeof ws[cell_address].v === 'string' && ws[cell_address].v.includes('R$')) {
+                            ws[cell_address].s.font.bold = true;
+                            ws[cell_address].s.font.color = { rgb: "E91E63" };
+                        }
+                    }
+                }
+            }
+            
+            // Configurar altura das linhas
+            ws['!rows'] = [
+                { hpt: 25 }, // Título
+                { hpt: 20 }, // Cabeçalho
+                ...Array(range.e.r - 1).fill({ hpt: 16 }) // Dados
+            ];
+        }
         
         // Planilha de Clientes
         const clientes = esteticaFabiane.getData('clientes');
         const clientesData = [
-            ['CLIENTES'],
+            ['👥 CLIENTES - ESTÉTICA FABIANE PROCÓPIO'],
             ['Nome', 'Telefone', 'Email', 'Data de Nascimento', 'Endereço'],
             ...clientes.map(cliente => [
-                cliente.nome,
-                cliente.telefone,
-                cliente.email,
-                cliente.dataNascimento,
-                cliente.endereco
+                cliente.nome || 'Não informado',
+                cliente.telefone || 'Não informado',
+                cliente.email || 'Não informado',
+                cliente.dataNascimento || 'Não informado',
+                cliente.endereco || 'Não informado'
             ])
         ];
         
         const wsClientes = XLSX.utils.aoa_to_sheet(clientesData);
-        wsClientes['!cols'] = [{ width: 25 }, { width: 15 }, { width: 30 }, { width: 15 }, { width: 40 }];
-        XLSX.utils.book_append_sheet(wb, wsClientes, "Clientes");
+        wsClientes['!cols'] = [{ width: 25 }, { width: 18 }, { width: 30 }, { width: 18 }, { width: 40 }];
+        applyCustomStyles(wsClientes, 'CLIENTES', '👥');
+        XLSX.utils.book_append_sheet(wb, wsClientes, "👥 Clientes");
         
         // Planilha de Agendamentos
         const agendamentos = esteticaFabiane.getData('agendamentos');
         const agendamentosData = [
-            ['AGENDAMENTOS'],
+            ['📅 AGENDAMENTOS - ESTÉTICA FABIANE PROCÓPIO'],
             ['Cliente', 'Serviço', 'Data', 'Horário', 'Status', 'Observações'],
             ...agendamentos.map(agendamento => [
-                agendamento.cliente,
-                agendamento.servico,
-                agendamento.data,
-                agendamento.horario,
-                agendamento.status,
+                agendamento.cliente || 'Não informado',
+                agendamento.servico || 'Não informado',
+                agendamento.data || 'Não informado',
+                agendamento.horario || 'Não informado',
+                agendamento.status || 'Não informado',
                 agendamento.observacoes || ''
             ])
         ];
         
         const wsAgendamentos = XLSX.utils.aoa_to_sheet(agendamentosData);
         wsAgendamentos['!cols'] = [{ width: 25 }, { width: 30 }, { width: 12 }, { width: 10 }, { width: 15 }, { width: 40 }];
-        XLSX.utils.book_append_sheet(wb, wsAgendamentos, "Agendamentos");
+        applyCustomStyles(wsAgendamentos, 'AGENDAMENTOS', '📅');
+        XLSX.utils.book_append_sheet(wb, wsAgendamentos, "📅 Agendamentos");
         
         // Planilha de Serviços
         const servicos = esteticaFabiane.getData('servicos');
         const servicosData = [
-            ['SERVIÇOS'],
-            ['Nome', 'Descrição', 'Preço', 'Duração'],
+            ['💆‍♀️ SERVIÇOS - ESTÉTICA FABIANE PROCÓPIO'],
+            ['Nome', 'Categoria', 'Descrição', 'Preço', 'Duração (min)'],
             ...servicos.map(servico => [
-                servico.nome,
-                servico.descricao,
-                'R$ ' + servico.preco.toFixed(2),
-                servico.duracao + ' min'
+                servico.nome || 'Não informado',
+                servico.categoria || 'Não informado',
+                servico.descricao || 'Não informado',
+                'R$ ' + (servico.preco ? servico.preco.toFixed(2).replace('.', ',') : '0,00'),
+                servico.duracao ? servico.duracao + ' min' : 'Não informado'
             ])
         ];
         
         const wsServicos = XLSX.utils.aoa_to_sheet(servicosData);
-        wsServicos['!cols'] = [{ width: 30 }, { width: 50 }, { width: 15 }, { width: 15 }];
-        XLSX.utils.book_append_sheet(wb, wsServicos, "Serviços");
+        wsServicos['!cols'] = [{ width: 30 }, { width: 20 }, { width: 50 }, { width: 15 }, { width: 15 }];
+        applyCustomStyles(wsServicos, 'SERVIÇOS', '💆‍♀️');
+        XLSX.utils.book_append_sheet(wb, wsServicos, "💆‍♀️ Serviços");
         
         // Planilha de Produtos
         const produtos = esteticaFabiane.getData('produtos');
         const produtosData = [
-            ['PRODUTOS'],
-            ['Nome', 'Categoria', 'Preço', 'Estoque', 'Fornecedor'],
+            ['📦 PRODUTOS - ESTÉTICA FABIANE PROCÓPIO'],
+            ['Nome', 'Categoria', 'Preço Unit.', 'Estoque', 'Estoque Mín.', 'Fornecedor'],
             ...produtos.map(produto => [
-                produto.nome,
-                produto.categoria,
-                'R$ ' + produto.preco.toFixed(2),
-                produto.estoque,
-                produto.fornecedor
+                produto.nome || 'Não informado',
+                produto.categoria || 'Não informado',
+                'R$ ' + (produto.preco ? produto.preco.toFixed(2).replace('.', ',') : '0,00'),
+                produto.estoque || produto.quantidade || 0,
+                produto.estoqueMinimo || 'Não definido',
+                produto.fornecedor || 'Não informado'
             ])
         ];
         
         const wsProdutos = XLSX.utils.aoa_to_sheet(produtosData);
-        wsProdutos['!cols'] = [{ width: 30 }, { width: 20 }, { width: 15 }, { width: 10 }, { width: 25 }];
-        XLSX.utils.book_append_sheet(wb, wsProdutos, "Produtos");
+        wsProdutos['!cols'] = [{ width: 30 }, { width: 20 }, { width: 15 }, { width: 10 }, { width: 12 }, { width: 25 }];
+        applyCustomStyles(wsProdutos, 'PRODUTOS', '📦');
+        XLSX.utils.book_append_sheet(wb, wsProdutos, "📦 Produtos");
         
-        // Aplicar estilos aos cabeçalhos
-        [wsClientes, wsAgendamentos, wsServicos, wsProdutos].forEach(ws => {
-            const range = XLSX.utils.decode_range(ws['!ref']);
-            for (let C = range.s.c; C <= range.e.c; ++C) {
-                // Título (linha 0)
-                const titleCell = XLSX.utils.encode_cell({c: C, r: 0});
-                if (ws[titleCell]) {
-                    ws[titleCell].s = {
-                        font: { bold: true, sz: 14, color: { rgb: "E91E63" } },
-                        alignment: { horizontal: "center" },
-                        fill: { fgColor: { rgb: "FCE4EC" } }
-                    };
-                }
-                
-                // Cabeçalho (linha 1)
-                const headerCell = XLSX.utils.encode_cell({c: C, r: 1});
-                if (ws[headerCell]) {
-                    ws[headerCell].s = {
-                        font: { bold: true, color: { rgb: "FFFFFF" } },
-                        fill: { fgColor: { rgb: "E91E63" } },
-                        alignment: { horizontal: "center" }
-                    };
-                }
-            }
-        });
+        // Planilha de Resumo
+        const stats = esteticaFabiane.getDashboardStats();
+        const resumoData = [
+            ['🌸 RESUMO EXECUTIVO - ESTÉTICA FABIANE PROCÓPIO'],
+            ['Indicador', 'Valor'],
+            ['📅 Data do Relatório', currentDate],
+            ['👥 Total de Clientes', stats.totalClientes],
+            ['📅 Total de Agendamentos', stats.totalAgendamentos],
+            ['💆‍♀️ Total de Serviços', stats.totalServicos],
+            ['📦 Total de Produtos', stats.totalProdutos],
+            ['💰 Receita Total Realizada', 'R$ ' + stats.receitaTotal.toFixed(2).replace('.', ',')],
+            [''],
+            ['🏢 Estética Fabiane Procópio'],
+            ['📍 Beleza & Bem-estar'],
+            ['📱 Sistema de Gestão Integrado']
+        ];
+        
+        const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
+        wsResumo['!cols'] = [{ width: 35 }, { width: 25 }];
+        applyCustomStyles(wsResumo, 'RESUMO', '🌸');
+        XLSX.utils.book_append_sheet(wb, wsResumo, "🌸 Resumo");
         
         XLSX.writeFile(wb, `Relatorio_Detalhado_Estetica_Fabiane_${new Date().toISOString().split('T')[0]}.xlsx`);
         
@@ -1164,7 +1858,9 @@ document.addEventListener('DOMContentLoaded', function() {
     esteticaFabiane.initCalendar();
     
     // Inicializar dados de exemplo se não existirem
-    esteticaFabiane.initializeExampleData();
+    if (esteticaFabiane.getServicos().length === 0) {
+        esteticaFabiane.initializeExampleData();
+    }
     
     // Renderizar todas as páginas
     esteticaFabiane.renderDashboard();
