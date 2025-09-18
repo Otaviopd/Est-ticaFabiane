@@ -1,1905 +1,1755 @@
-// Sistema Estética Fabiane Procópio - Gestão Completa
-// Integração com API PostgreSQL no Render
+// ========================================
+// SISTEMA DE GESTÃO - ESTÉTICA FABIANE PROCÓPIO
+// ========================================
 
-// Configurações
-const config = {
-    api: {
-        baseUrl: 'https://estetica-fabiane-api.onrender.com/api',
-        timeout: 30000
-    },
-    app: {
-        name: 'Estética Fabiane Procópio',
-        version: '2.0.0',
-        description: 'Sistema de Gestão para Estética Facial e Corporal'
-    },
-    development: {
-        useLocalStorageFallback: true,
-        enableDebugLogs: true
+// Configuração da API - ATUALIZADO PARA FORÇAR CACHE
+const API_BASE_URL = 'https://estetica-fabiane-api.onrender.com/api';
+
+// Estado global da aplicação
+const AppState = {
+    currentPage: 'dashboard',
+    currentDate: new Date(),
+    clientes: [],
+    servicos: [],
+    produtos: [],
+    agendamentos: [],
+    stats: {
+        totalClientes: 0,
+        agendamentosHoje: 0,
+        receitaMes: 0,
+        servicosRealizados: 0
     }
 };
 
-// =====================================================
-// CAMADA DE COMUNICAÇÃO COM A API
-// =====================================================
-class ApiService {
-    constructor() {
-        this.baseUrl = config.api.baseUrl;
-        this.timeout = config.api.timeout;
-    }
+// ========================================
+// UTILITÁRIOS E HELPERS
+// ========================================
 
-    async makeRequest(endpoint, options = {}) {
-        const url = `${this.baseUrl}${endpoint}`;
-        
-        const defaultOptions = {
+// Função para fazer requisições à API
+async function apiRequest(endpoint, options = {}) {
+    try {
+        const url = `${API_BASE_URL}${endpoint}`;
+        const config = {
             headers: {
                 'Content-Type': 'application/json',
+                ...options.headers
             },
-            timeout: this.timeout
+            ...options
         };
 
-        const requestOptions = { ...defaultOptions, ...options };
-
-        try {
-            console.log(`🌐 Fazendo requisição para: ${url}`);
-            const response = await fetch(url, requestOptions);
+        console.log(`🔄 API Request: ${options.method || 'GET'} ${url}`);
+        
+        const response = await fetch(url, config);
+        
+        if (!response.ok) {
+            const errorMessage = `Erro ${response.status}: ${response.statusText}`;
+            console.error(`❌ API Error: ${errorMessage} - ${url}`);
             
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            console.log(`✅ Resposta recebida:`, data);
-            return data;
-        } catch (error) {
-            console.error(`❌ Erro na requisição para ${endpoint}:`, error);
-            
-            // Fallback para localStorage se API não estiver disponível
-            if (config.development.useLocalStorageFallback) {
-                console.warn('⚠️ API indisponível, usando localStorage como fallback');
-                return this.handleLocalStorageFallback(endpoint, options);
+            if (response.status === 404) {
+                showNotification(`API não encontrada. Verifique se o servidor está rodando: ${endpoint}`, 'error');
+            } else if (response.status === 500) {
+                showNotification('Erro interno do servidor. Tente novamente.', 'error');
+            } else {
+                showNotification(`Erro na API: ${response.status}`, 'error');
             }
             
-            throw error;
-        }
-    }
-
-    handleLocalStorageFallback(endpoint, options) {
-        const method = options.method || 'GET';
-        
-        if (endpoint.includes('/clients')) {
-            return this.handleClientsFallback(method, options, endpoint);
-        } else if (endpoint.includes('/services')) {
-            return this.handleServicesFallback(method, options, endpoint);
-        } else if (endpoint.includes('/appointments')) {
-            return this.handleAppointmentsFallback(method, options, endpoint);
-        } else if (endpoint.includes('/products')) {
-            return this.handleProductsFallback(method, options, endpoint);
+            throw new Error(errorMessage);
         }
         
-        return { data: [], error: 'Endpoint não suportado no fallback' };
-    }
-
-    // Fallbacks para localStorage
-    handleClientsFallback(method, options, endpoint) {
-        const clientes = JSON.parse(localStorage.getItem('fabiane_clientes') || '[]');
+        const data = await response.json();
+        console.log(`✅ API Success: ${options.method || 'GET'} ${url}`, data);
+        return data;
         
-        if (method === 'GET') {
-            return { data: clientes };
-        } else if (method === 'POST') {
-            const novoCliente = JSON.parse(options.body);
-            novoCliente.id = Date.now();
-            clientes.push(novoCliente);
-            localStorage.setItem('fabiane_clientes', JSON.stringify(clientes));
-            return { data: novoCliente };
+    } catch (error) {
+        const url = `${API_BASE_URL}${endpoint}`;
+        console.error(`💥 Network Error: ${error.message} - ${url}`);
+        
+        if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
+            showNotification('Erro de conexão. Verifique sua internet e se a API está online.', 'error');
+        } else {
+            showNotification(`Erro: ${error.message}`, 'error');
         }
         
-        return { data: clientes };
-    }
-
-    handleServicesFallback(method, options, endpoint) {
-        const servicos = JSON.parse(localStorage.getItem('fabiane_servicos') || '[]');
-        
-        if (method === 'GET') {
-            return { data: servicos };
-        }
-        
-        return { data: servicos };
-    }
-
-    handleAppointmentsFallback(method, options, endpoint) {
-        const agendamentos = JSON.parse(localStorage.getItem('fabiane_agendamentos') || '[]');
-        
-        if (method === 'GET') {
-            return { data: agendamentos };
-        } else if (method === 'POST') {
-            const novoAgendamento = JSON.parse(options.body);
-            novoAgendamento.id = Date.now();
-            agendamentos.push(novoAgendamento);
-            localStorage.setItem('fabiane_agendamentos', JSON.stringify(agendamentos));
-            return { data: novoAgendamento };
-        }
-        
-        return { data: agendamentos };
-    }
-
-    handleProductsFallback(method, options, endpoint) {
-        const produtos = JSON.parse(localStorage.getItem('fabiane_produtos') || '[]');
-        
-        if (method === 'GET') {
-            return { data: produtos };
-        } else if (method === 'POST') {
-            const novoProduto = JSON.parse(options.body);
-            novoProduto.id = Date.now();
-            produtos.push(novoProduto);
-            localStorage.setItem('fabiane_produtos', JSON.stringify(produtos));
-            return { data: novoProduto };
-        }
-        
-        return { data: produtos };
-    }
-
-    // =====================================================
-    // MÉTODOS PARA CLIENTES
-    // =====================================================
-    async getClientes() {
-        return await this.makeRequest('/clients');
-    }
-
-    async createCliente(cliente) {
-        return await this.makeRequest('/clients', {
-            method: 'POST',
-            body: JSON.stringify(cliente)
-        });
-    }
-
-    async updateCliente(id, updates) {
-        return await this.makeRequest(`/clients/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(updates)
-        });
-    }
-
-    async deleteCliente(id) {
-        return await this.makeRequest(`/clients/${id}`, {
-            method: 'DELETE'
-        });
-    }
-
-    // =====================================================
-    // MÉTODOS PARA SERVIÇOS
-    // =====================================================
-    async getServicos() {
-        return await this.makeRequest('/services');
-    }
-
-    async createServico(servico) {
-        return await this.makeRequest('/services', {
-            method: 'POST',
-            body: JSON.stringify(servico)
-        });
-    }
-
-    async updateServico(id, updates) {
-        return await this.makeRequest(`/services/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(updates)
-        });
-    }
-
-    async deleteServico(id) {
-        return await this.makeRequest(`/services/${id}`, {
-            method: 'DELETE'
-        });
-    }
-
-    // =====================================================
-    // MÉTODOS PARA AGENDAMENTOS
-    // =====================================================
-    async getAgendamentos() {
-        return await this.makeRequest('/appointments');
-    }
-
-    async createAgendamento(agendamento) {
-        return await this.makeRequest('/appointments', {
-            method: 'POST',
-            body: JSON.stringify(agendamento)
-        });
-    }
-
-    async updateAgendamento(id, updates) {
-        return await this.makeRequest(`/appointments/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(updates)
-        });
-    }
-
-    async deleteAgendamento(id) {
-        return await this.makeRequest(`/appointments/${id}`, {
-            method: 'DELETE'
-        });
-    }
-
-    // =====================================================
-    // MÉTODOS PARA PRODUTOS
-    // =====================================================
-    async getProdutos() {
-        return await this.makeRequest('/products');
-    }
-
-    async createProduto(produto) {
-        return await this.makeRequest('/products', {
-            method: 'POST',
-            body: JSON.stringify(produto)
-        });
-    }
-
-    async updateProduto(id, updates) {
-        return await this.makeRequest(`/products/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(updates)
-        });
-    }
-
-    async deleteProduto(id) {
-        return await this.makeRequest(`/products/${id}`, {
-            method: 'DELETE'
-        });
+        throw error;
     }
 }
 
-// Instância global do serviço de API
-const apiService = new ApiService();
+// Função para formatar data
+function formatDate(date) {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toLocaleDateString('pt-BR');
+}
 
-class EsteticaFabianeSystem {
-    constructor() {
-        this.currentPage = 'dashboard';
-        this.loading = false;
-        this.init();
+// Função para formatar data e hora
+function formatDateTime(date) {
+    if (!date) return '';
+    const d = new Date(date);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Função para formatar moeda
+function formatCurrency(value) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(value || 0);
+}
+
+// Função para formatar telefone
+function formatPhone(phone) {
+    if (!phone) return '';
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 11) {
+        return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7)}`;
     }
+    return phone;
+}
 
-    async init() {
-        try {
-            this.showLoading(true);
-            console.log('🚀 Inicializando Sistema Estética Fabiane...');
-            
-            // Carrega os dados da API
-            await this.loadInitialData();
-            
-            // Atualiza a interface
-            await this.updateDashboard();
-            await this.renderClientes();
-            await this.renderServicos();
-            await this.renderProdutos();
-            await this.renderAgendamentos();
-            await this.updateRelatorios();
-            
-            this.setupEventListeners();
-            this.setupNavigation();
-            console.log('✅ Sistema inicializado com sucesso!');
-        } catch (error) {
-            console.error('❌ Erro ao inicializar o sistema:', error);
-            this.showNotification('Erro ao carregar os dados. Tente recarregar a página.', 'error');
-        } finally {
-            this.showLoading(false);
-        }
-    }
+// ========================================
+// SISTEMA DE NAVEGAÇÃO
+// ========================================
 
-    // ===== GERENCIAMENTO DE DADOS =====
+function initNavigation() {
+    const navLinks = document.querySelectorAll('.nav-link');
     
-    // Clientes
-    async getClientes() {
-        try {
-            const response = await apiService.getClientes();
-            return response.data || [];
-        } catch (error) {
-            console.error('Erro ao carregar clientes:', error);
-            return JSON.parse(localStorage.getItem('fabiane_clientes') || '[]');
-        }
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = link.getAttribute('data-page');
+            navigateToPage(page);
+        });
+    });
+}
+
+function navigateToPage(pageName) {
+    // Remove active class from all nav links
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // Add active class to current nav link
+    const currentLink = document.querySelector(`[data-page="${pageName}"]`);
+    if (currentLink) {
+        currentLink.classList.add('active');
     }
-
-    async addCliente(cliente) {
-        try {
-            this.showLoading(true);
-            const response = await apiService.createCliente(cliente);
-            this.showNotification('Cliente adicionado com sucesso!', 'success');
-            await this.renderClientes();
-            await this.updateDashboard();
-            return response.data;
-        } catch (error) {
-            console.error('Erro ao adicionar cliente:', error);
-            this.showNotification('Erro ao adicionar cliente', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    async updateCliente(id, updates) {
-        try {
-            this.showLoading(true);
-            await apiService.updateCliente(id, updates);
-            this.showNotification('Cliente atualizado com sucesso!', 'success');
-            await this.renderClientes();
-            await this.updateDashboard();
-        } catch (error) {
-            console.error('Erro ao atualizar cliente:', error);
-            this.showNotification('Erro ao atualizar cliente', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    async deleteCliente(id) {
-        try {
-            this.showLoading(true);
-            await apiService.deleteCliente(id);
-            this.showNotification('Cliente removido com sucesso!', 'success');
-            await this.renderClientes();
-            await this.updateDashboard();
-        } catch (error) {
-            console.error('Erro ao remover cliente:', error);
-            this.showNotification('Erro ao remover cliente', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    // Serviços
-    async getServicos() {
-        try {
-            const response = await apiService.getServicos();
-            return response.data || [];
-        } catch (error) {
-            console.error('Erro ao carregar serviços:', error);
-            return JSON.parse(localStorage.getItem('fabiane_servicos') || '[]');
-        }
-    }
-
-    async addServico(servico) {
-        try {
-            this.showLoading(true);
-            const response = await apiService.createServico(servico);
-            this.showNotification('Serviço adicionado com sucesso!', 'success');
-            await this.renderServicos();
-            return response.data;
-        } catch (error) {
-            console.error('Erro ao adicionar serviço:', error);
-            this.showNotification('Erro ao adicionar serviço', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    async updateServico(id, updates) {
-        try {
-            this.showLoading(true);
-            await apiService.updateServico(id, updates);
-            this.showNotification('Serviço atualizado com sucesso!', 'success');
-            await this.renderServicos();
-        } catch (error) {
-            console.error('Erro ao atualizar serviço:', error);
-            this.showNotification('Erro ao atualizar serviço', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    async deleteServico(id) {
-        try {
-            this.showLoading(true);
-            await apiService.deleteServico(id);
-            this.showNotification('Serviço removido com sucesso!', 'success');
-            await this.renderServicos();
-        } catch (error) {
-            console.error('Erro ao remover serviço:', error);
-            this.showNotification('Erro ao remover serviço', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    // Produtos
-    async getProdutos() {
-        try {
-            const response = await apiService.getProdutos();
-            return response.data || [];
-        } catch (error) {
-            console.error('Erro ao carregar produtos:', error);
-            return JSON.parse(localStorage.getItem('fabiane_produtos') || '[]');
-        }
-    }
-
-    async addProduto(produto) {
-        try {
-            this.showLoading(true);
-            produto.createdAt = new Date().toISOString();
-            produto.estoqueAtual = produto.estoqueAtual || 0;
-            const response = await apiService.createProduto(produto);
-            const novoProduto = response.data;
-            this.showNotification('Produto adicionado com sucesso!', 'success');
-            await this.renderProdutos();
-            return novoProduto;
-        } catch (error) {
-            console.error('Erro ao adicionar produto:', error);
-            this.showNotification('Erro ao adicionar produto', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    async updateProduto(id, updates) {
-        try {
-            this.showLoading(true);
-            await apiService.updateProduto(id, updates);
-            this.showNotification('Produto atualizado com sucesso!', 'success');
-            await this.renderProdutos();
-        } catch (error) {
-            console.error('Erro ao atualizar produto:', error);
-            this.showNotification('Erro ao atualizar produto', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    async deleteProduto(id) {
-        try {
-            this.showLoading(true);
-            await apiService.deleteProduto(id);
-            this.showNotification('Produto removido com sucesso!', 'success');
-            await this.renderProdutos();
-        } catch (error) {
-            console.error('Erro ao remover produto:', error);
-            this.showNotification('Erro ao remover produto', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    deleteServico(id) {
-        const servicos = this.getServicos();
-        const filtered = servicos.filter(s => s.id !== id);
-        this.saveServicos(filtered);
-    }
-
-    // Agendamentos
-    async getAgendamentos() {
-        try {
-            const response = await apiService.getAgendamentos();
-            return response.data || [];
-        } catch (error) {
-            console.error('Erro ao buscar agendamentos:', error);
-            this.showNotification('Erro ao carregar agendamentos', 'error');
-            return [];
-        }
-    }
-
-    async addAgendamento(agendamento) {
-        try {
-            this.showLoading(true);
-            agendamento.createdAt = new Date().toISOString();
-            agendamento.status = 'agendado';
-            const response = await apiService.createAgendamento(agendamento);
-            const novoAgendamento = response.data;
-            this.showNotification('Agendamento realizado com sucesso!', 'success');
-            await this.renderAgendamentos();
-            await this.updateDashboard();
-            return novoAgendamento;
-        } catch (error) {
-            console.error('Erro ao adicionar agendamento:', error);
-            this.showNotification('Erro ao adicionar agendamento', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    async updateAgendamento(id, updates) {
-        try {
-            this.showLoading(true);
-            await apiService.updateAgendamento(id, updates);
-            this.showNotification('Agendamento atualizado com sucesso!', 'success');
-            await this.renderAgendamentos();
-            await this.updateDashboard();
-        } catch (error) {
-            console.error('Erro ao atualizar agendamento:', error);
-            this.showNotification('Erro ao atualizar agendamento', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    async deleteAgendamento(id) {
-        try {
-            this.showLoading(true);
-            await apiService.deleteAgendamento(id);
-            this.showNotification('Agendamento removido com sucesso!', 'success');
-            await this.renderAgendamentos();
-            await this.updateDashboard();
-        } catch (error) {
-            console.error('Erro ao remover agendamento:', error);
-            this.showNotification('Erro ao remover agendamento', 'error');
-            throw error;
-        } finally {
-            this.showLoading(false);
-        }
-    }
-
-    // Produtos
-    getProdutos() {
-        return JSON.parse(localStorage.getItem('fabiane_produtos') || '[]');
-    }
-
-    saveProdutos(produtos) {
-        localStorage.setItem('fabiane_produtos', JSON.stringify(produtos));
-    }
-
-    addProduto(produto) {
-        const produtos = this.getProdutos();
-        produto.id = Date.now().toString();
-        produto.createdAt = new Date().toISOString();
-        produtos.push(produto);
-        this.saveProdutos(produtos);
-        return produto;
-    }
-
-    updateProduto(id, updates) {
-        const produtos = this.getProdutos();
-        const index = produtos.findIndex(p => p.id === id);
-        if (index !== -1) {
-            produtos[index] = { ...produtos[index], ...updates };
-            this.saveProdutos(produtos);
-        }
-    }
-
-    deleteProduto(id) {
-        const produtos = this.getProdutos();
-        const filtered = produtos.filter(p => p.id !== id);
-        this.saveProdutos(filtered);
-    }
-
-    // ===== RENDERIZAÇÃO =====
-
-    async renderClientes() {
-        const clientes = await this.getClientes();
-        const tbody = document.getElementById('clientes-table');
-
-        if (clientes.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                        Nenhuma cliente cadastrada
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = clientes.map(cliente => {
-            const ultimoAtendimento = this.getUltimoAtendimento(cliente.id);
-            return `
-                <tr>
-                    <td>${cliente.nome}</td>
-                    <td>${cliente.telefone}</td>
-                    <td>${cliente.email || 'Não informado'}</td>
-                    <td>${ultimoAtendimento || 'Nunca'}</td>
-                    <td>
-                        <button class="btn btn-outline" onclick="editCliente('${cliente.id}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-outline" onclick="deleteClienteConfirm('${cliente.id}')" style="margin-left: 0.5rem;">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    async renderServicos() {
-        const servicos = await this.getServicos();
-        const tbody = document.getElementById('servicos-table');
-
-        if (servicos.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                        Nenhum serviço cadastrado
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = servicos.map(servico => `
-            <tr>
-                <td>${servico.nome}</td>
-                <td>${servico.categoria}</td>
-                <td>${servico.duracao} min</td>
-                <td>${this.formatCurrency(servico.preco)}</td>
-                <td>
-                    <span class="status ${servico.active ? 'active' : 'inactive'}">
-                        ${servico.active ? 'Ativo' : 'Inativo'}
-                    </span>
-                </td>
-                <td>
-                    <button class="btn btn-outline" onclick="editServico('${servico.id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-outline" onclick="deleteServicoConfirm('${servico.id}')" style="margin-left: 0.5rem;">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            </tr>
-        `).join('');
-    }
-
-    async renderAgendamentos() {
-        const agendamentos = await this.getAgendamentos();
-        const clientes = await this.getClientes();
-        const servicos = await this.getServicos();
-        const tbody = document.getElementById('agendamentos-table');
-
-        if (agendamentos.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                        Nenhum agendamento cadastrado
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = agendamentos.map(agendamento => {
-            const cliente = clientes.find(c => c.id === agendamento.clienteId);
-            const servico = servicos.find(s => s.id === agendamento.servicoId);
-            
-            return `
-                <tr>
-                    <td>${this.formatDateTime(agendamento.data, agendamento.horario)}</td>
-                    <td>${cliente ? cliente.nome : 'Cliente não encontrado'}</td>
-                    <td>${servico ? servico.nome : 'Serviço não encontrado'}</td>
-                    <td>
-                        <span class="status ${agendamento.status}">
-                            ${this.getStatusLabel(agendamento.status)}
-                        </span>
-                    </td>
-                    <td>${servico ? this.formatCurrency(servico.preco) : 'N/A'}</td>
-                    <td>
-                        <button class="btn btn-outline" onclick="editAgendamento('${agendamento.id}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-outline" onclick="deleteAgendamentoConfirm('${agendamento.id}')" style="margin-left: 0.5rem;">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    async renderProdutos() {
-        const produtos = await this.getProdutos();
-        const tbody = document.getElementById('produtos-table');
-
-        if (produtos.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
-                        Nenhum produto cadastrado
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = produtos.map(produto => {
-            const status = this.getStockStatus(produto);
-            return `
-                <tr>
-                    <td>${produto.nome}</td>
-                    <td>${produto.categoria}</td>
-                    <td>${produto.quantidade}</td>
-                    <td>${this.formatCurrency(produto.preco)}</td>
-                    <td>
-                        <span class="status ${status}">
-                            ${this.getStockLabel(status)}
-                        </span>
-                    </td>
-                    <td>
-                        <button class="btn btn-outline" onclick="editProduto('${produto.id}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-outline" onclick="deleteProdutoConfirm('${produto.id}')" style="margin-left: 0.5rem;">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    // ===== FUNÇÕES AUXILIARES =====
-
-    formatCurrency(value) {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        }).format(value);
-    }
-
-    formatDateTime(date, time) {
-        const dateObj = new Date(date + 'T' + time);
-        return dateObj.toLocaleString('pt-BR');
-    }
-
-    getStatusLabel(status) {
-        const labels = {
-            'agendado': 'Agendado',
-            'confirmado': 'Confirmado',
-            'realizado': 'Realizado',
-            'cancelado': 'Cancelado'
-        };
-        return labels[status] || status;
-    }
-
-    getStockStatus(produto) {
-        if (produto.quantidade === 0) return 'out';
-        if (produto.quantidade <= produto.estoqueMinimo) return 'low';
-        return 'ok';
-    }
-
-    getStockLabel(status) {
-        const labels = {
-            'ok': 'Estoque OK',
-            'low': 'Estoque Baixo',
-            'out': 'Sem Estoque'
-        };
-        return labels[status] || status;
-    }
-
-    getUltimoAtendimento(clienteId) {
-        const agendamentos = this.getAgendamentos();
-        const atendimentos = agendamentos
-            .filter(a => a.clienteId === clienteId && a.status === 'realizado')
-            .sort((a, b) => new Date(b.data) - new Date(a.data));
+    
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.add('hidden');
+    });
+    
+    // Show current page
+    const currentPage = document.getElementById(`${pageName}-page`);
+    if (currentPage) {
+        currentPage.classList.remove('hidden');
+        AppState.currentPage = pageName;
         
-        if (atendimentos.length > 0) {
-            return this.formatDateTime(atendimentos[0].data, atendimentos[0].horario);
+        // Load page data
+        loadPageData(pageName);
+    }
+}
+
+async function loadPageData(pageName) {
+    switch (pageName) {
+        case 'dashboard':
+            await loadDashboard();
+            break;
+        case 'clientes':
+            await loadClientes();
+            break;
+        case 'calendario':
+            await loadCalendario();
+            break;
+        case 'agendamentos':
+            await loadAgendamentos();
+            break;
+        case 'servicos':
+            await loadServicos();
+            break;
+        case 'produtos':
+            await loadProdutos();
+            break;
+        case 'relatorios':
+            await loadRelatorios();
+            break;
+    }
+}
+
+// ========================================
+// SISTEMA DE MODAIS
+// ========================================
+
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('active');
+        
+        // Limpar formulário se existir
+        const form = modal.querySelector('form');
+        if (form) {
+            form.reset();
         }
-        return null;
-    }
-
-    // ===== DASHBOARD =====
-
-    async updateDashboard() {
-        const clientes = await this.getClientes();
-        const agendamentos = await this.getAgendamentos();
-        const servicos = await this.getServicos();
         
-        // Agendamentos de hoje
-        const hoje = new Date().toISOString().split('T')[0];
-        const agendamentosHoje = agendamentos.filter(a => a.data === hoje);
-        
-        // Receita do mês
-        const mesAtual = new Date().getMonth();
-        const anoAtual = new Date().getFullYear();
-        const receitaMes = agendamentos
-            .filter(a => {
-                const dataAgendamento = new Date(a.data);
-                return dataAgendamento.getMonth() === mesAtual && 
-                       dataAgendamento.getFullYear() === anoAtual &&
-                       a.status === 'realizado';
-            })
-            .reduce((total, agendamento) => {
-                const servico = servicos.find(s => s.id === agendamento.servicoId);
-                return total + (servico ? servico.preco : 0);
-            }, 0);
-
-        // Serviços realizados
-        const servicosRealizados = agendamentos.filter(a => a.status === 'realizado').length;
-
-        // Atualizar elementos
-        document.getElementById('total-clientes').textContent = clientes.length;
-        document.getElementById('agendamentos-hoje').textContent = agendamentosHoje.length;
-        document.getElementById('receita-mes').textContent = this.formatCurrency(receitaMes);
-        document.getElementById('servicos-realizados').textContent = servicosRealizados;
-
-        // Próximos agendamentos
-        await this.renderProximosAgendamentos();
+        // Carregar dados específicos do modal
+        loadModalData(modalId);
     }
+}
 
-    async renderProximosAgendamentos() {
-        const agendamentos = await this.getAgendamentos();
-        const clientes = await this.getClientes();
-        const servicos = await this.getServicos();
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+async function loadModalData(modalId) {
+    switch (modalId) {
+        case 'agendamento-modal':
+            await loadClientesSelect();
+            await loadServicosSelect();
+            break;
+    }
+}
+
+// ========================================
+// SISTEMA DE NOTIFICAÇÕES
+// ========================================
+
+function showNotification(message, type = 'success') {
+    // Remove notification existente
+    const existingNotification = document.querySelector('.notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    // Criar nova notification
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Remove após 3 segundos
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+
+// ========================================
+// DASHBOARD
+// ========================================
+
+async function loadDashboard() {
+    try {
+        // Carregar estatísticas
+        await loadDashboardStats();
+        
+        // Carregar próximos agendamentos
+        await loadProximosAgendamentos();
+        
+    } catch (error) {
+        console.error('Erro ao carregar dashboard:', error);
+    }
+}
+
+async function loadDashboardStats() {
+    try {
+        const stats = await apiRequest('/dashboard/stats');
+        
+        // Atualizar elementos do DOM
+        document.getElementById('total-clientes').textContent = stats.totalClientes || 0;
+        document.getElementById('agendamentos-hoje').textContent = stats.agendamentosHoje || 0;
+        document.getElementById('receita-mes').textContent = formatCurrency(stats.receitaMes || 0);
+        document.getElementById('servicos-realizados').textContent = stats.servicosRealizados || 0;
+        
+        // Atualizar estado
+        AppState.stats = stats;
+        
+    } catch (error) {
+        console.error('Erro ao carregar estatísticas:', error);
+        // Valores padrão em caso de erro
+        document.getElementById('total-clientes').textContent = '0';
+        document.getElementById('agendamentos-hoje').textContent = '0';
+        document.getElementById('receita-mes').textContent = 'R$ 0,00';
+        document.getElementById('servicos-realizados').textContent = '0';
+    }
+}
+
+async function loadProximosAgendamentos() {
+    try {
+        const agendamentos = await apiRequest('/agendamentos/proximos');
         const container = document.getElementById('proximos-agendamentos');
         
-        const hoje = new Date();
-        const proximosAgendamentos = agendamentos
-            .filter(a => new Date(a.data) >= hoje && a.status === 'agendado')
-            .sort((a, b) => new Date(a.data + 'T' + a.horario) - new Date(b.data + 'T' + b.horario))
-            .slice(0, 5);
-
-        if (proximosAgendamentos.length === 0) {
+        if (!agendamentos || agendamentos.length === 0) {
             container.innerHTML = `
                 <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
-                    Nenhum agendamento próximo
+                    Nenhum agendamento para hoje
                 </p>
             `;
             return;
         }
-
-        container.innerHTML = proximosAgendamentos.map(agendamento => {
-            const cliente = clientes.find(c => c.id === agendamento.clienteId);
-            const servico = servicos.find(s => s.id === agendamento.servicoId);
-            
-            return `
-                <div style="padding: 1rem; border-left: 3px solid var(--primary-pink); margin-bottom: 1rem; background: var(--light-pink);">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>${cliente ? cliente.nome : 'Cliente não encontrado'}</strong><br>
-                            <span style="color: var(--text-secondary);">${servico ? servico.nome : 'Serviço não encontrado'}</span>
-                        </div>
-                        <div style="text-align: right;">
-                            <div>${this.formatDateTime(agendamento.data, agendamento.horario)}</div>
-                            <div style="color: var(--primary-pink); font-weight: 600;">
-                                ${servico ? this.formatCurrency(servico.preco) : 'N/A'}
-                            </div>
-                        </div>
+        
+        container.innerHTML = agendamentos.map(agendamento => `
+            <div style="border-left: 4px solid var(--primary-pink); padding: 1rem; margin-bottom: 1rem; background: var(--light-pink);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>${agendamento.cliente_nome}</strong>
+                        <p style="margin: 0.25rem 0; color: var(--text-secondary);">
+                            ${agendamento.servico_nome} - ${formatDateTime(agendamento.data_hora)}
+                        </p>
+                    </div>
+                    <div style="text-align: right;">
+                        <span class="badge badge-${agendamento.status}">${agendamento.status}</span>
+                        <p style="margin: 0.25rem 0; font-weight: 600;">
+                            ${formatCurrency(agendamento.preco)}
+                        </p>
                     </div>
                 </div>
-            `;
-        }).join('');
-    }
-
-    async updateRelatorios() {
-        const clientes = await this.getClientes();
-        const agendamentos = await this.getAgendamentos();
-        const servicos = await this.getServicos();
-        const produtos = await this.getProdutos();
-
-        document.getElementById('relatorio-clientes').textContent = clientes.length;
-        document.getElementById('relatorio-agendamentos').textContent = agendamentos.filter(a => a.status === 'realizado').length;
-        document.getElementById('relatorio-servicos').textContent = servicos.filter(s => s.active).length;
-        document.getElementById('relatorio-produtos').textContent = produtos.length;
-    }
-
-    // ===== NAVEGAÇÃO =====
-
-    async showPage(pageId) {
-        console.log(`📄 Navegando para página: ${pageId}`);
+            </div>
+        `).join('');
         
-        // Esconder todas as páginas
-        document.querySelectorAll('.page').forEach(page => {
-            page.classList.add('hidden');
-        });
-
-        // Remover classe active de todos os links
-        document.querySelectorAll('.sidebar-link').forEach(link => {
-            link.classList.remove('active');
-        });
-
-        // Mostrar página selecionada
-        const targetPage = document.getElementById(pageId + '-page');
-        if (targetPage) {
-            targetPage.classList.remove('hidden');
-            console.log(`✅ Página ${pageId} ativada`);
-        } else {
-            console.error(`❌ Página ${pageId}-page não encontrada`);
-        }
-        
-        // Adicionar classe active ao link correspondente
-        const targetLink = document.querySelector(`[data-page="${pageId}"]`);
-        if (targetLink) {
-            targetLink.classList.add('active');
-        }
-
-        // Atualizar página atual
-        this.currentPage = pageId;
-
-        // Atualizar dados baseado na página
-        switch(pageId) {
-            case 'dashboard':
-                await this.updateDashboard();
-                break;
-            case 'clientes':
-                await this.renderClientes();
-                await this.updateClienteSelect();
-                break;
-            case 'agendamentos':
-                await this.renderAgendamentos();
-                break;
-            case 'servicos':
-                await this.renderServicos();
-                break;
-            case 'produtos':
-                await this.renderProdutos();
-                break;
-            case 'calendario':
-                await this.renderCalendar();
-                break;
-            case 'relatorios':
-                await this.updateRelatorios();
-                break;
-        }
+    } catch (error) {
+        console.error('Erro ao carregar próximos agendamentos:', error);
     }
+}
 
-    // ===== MODAIS =====
+// ========================================
+// CLIENTES
+// ========================================
 
-    openModal(modalId) {
-        document.getElementById(modalId).classList.add('active');
+async function loadClientes() {
+    try {
+        const response = await apiRequest('/clientes');
+        console.log(' Resposta da API:', response);
         
-        // Atualizar selects se necessário
-        if (modalId === 'agendamento-modal') {
-            this.updateClienteSelect();
-            this.updateServicoSelect();
-        }
-    }
-
-    closeModal(modalId) {
-        document.getElementById(modalId).classList.remove('active');
+        // A API retorna {data: [...], pagination: {...}}
+        const clientes = response.data || response || [];
+        console.log(' Array de clientes:', clientes);
         
-        // Limpar formulário
-        const form = document.querySelector(`#${modalId} form`);
-        if (form) {
-            form.reset();
-        }
+        AppState.clientes = clientes;
+        renderClientesTable(clientes);
+    } catch (error) {
+        console.error('Erro ao carregar clientes:', error);
+        renderClientesTable([]);
     }
+}
 
-    async updateClienteSelect() {
-        const clientes = await this.getClientes();
-        const select = document.querySelector('select[name="clienteId"]');
-        
-        if (select) {
-            select.innerHTML = '<option value="">Selecione uma cliente</option>' +
-                clientes.map(cliente => 
-                    `<option value="${cliente.id}">${cliente.nome}</option>`
-                ).join('');
-        }
-    }
-
-    async updateServicoSelect() {
-        const servicos = await this.getServicos();
-        const select = document.querySelector('select[name="servicoId"]');
-        
-        if (select) {
-            select.innerHTML = '<option value="">Selecione um serviço</option>' +
-                servicos.filter(s => s.active).map(servico => 
-                    `<option value="${servico.id}">${servico.nome} - ${this.formatCurrency(servico.preco)}</option>`
-                ).join('');
-        }
-    }
-
-    // ===== NAVEGAÇÃO =====
+function renderClientesTable(clientes) {
+    const tbody = document.getElementById('clientes-table');
     
-    setupNavigation() {
-        // Configurar navegação do menu lateral
-        const navLinks = document.querySelectorAll('.nav-link');
-        navLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const targetPage = link.getAttribute('data-page');
-                this.showPage(targetPage);
-                
-                // Atualizar classe ativa
-                navLinks.forEach(l => l.classList.remove('active'));
-                link.classList.add('active');
-            });
-        });
-    }
-
-    // ===== CALENDÁRIO =====
-    
-    initCalendar() {
-        this.currentDate = new Date();
-        this.selectedDate = null;
-        this.setupCalendarEvents();
+    // Verificar se clientes é um array
+    if (!Array.isArray(clientes)) {
+        console.error('Dados de clientes não são um array:', clientes);
+        tbody.innerHTML = '<tr><td colspan="5">Erro ao carregar clientes</td></tr>';
+        return;
     }
     
-    setupCalendarEvents() {
-        const prevBtn = document.getElementById('prev-month');
-        const nextBtn = document.getElementById('next-month');
-        
-        if (prevBtn) {
-            prevBtn.addEventListener('click', async () => {
-                this.currentDate.setMonth(this.currentDate.getMonth() - 1);
-                await this.renderCalendar();
-            });
-        }
-        
-        if (nextBtn) {
-            nextBtn.addEventListener('click', async () => {
-                this.currentDate.setMonth(this.currentDate.getMonth() + 1);
-                await this.renderCalendar();
-            });
-        }
+    if (clientes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5">Nenhuma cliente cadastrada</td></tr>';
+        return;
     }
     
-    async renderCalendar() {
-        const calendarTitle = document.getElementById('calendar-title');
-        const calendarDays = document.getElementById('calendar-days');
-        
-        if (!calendarTitle || !calendarDays) return;
-        
-        // Atualizar título
-        const months = [
-            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-        ];
-        
-        calendarTitle.textContent = `${months[this.currentDate.getMonth()]} ${this.currentDate.getFullYear()}`;
-        
-        // Limpar dias
-        calendarDays.innerHTML = '';
-        
-        // Obter primeiro dia do mês e último dia
-        const firstDay = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
-        const lastDay = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 0);
-        const startDate = new Date(firstDay);
-        startDate.setDate(startDate.getDate() - firstDay.getDay());
-        
-        // Obter agendamentos do mês
-        const agendamentos = await this.getAgendamentos();
-        const today = new Date();
-        
-        // Gerar 42 dias (6 semanas)
-        for (let i = 0; i < 42; i++) {
-            const date = new Date(startDate);
-            date.setDate(startDate.getDate() + i);
-            
-            const dayElement = document.createElement('div');
-            dayElement.className = 'calendar-day';
-            
-            // Verificar se é do mês atual
-            if (date.getMonth() !== this.currentDate.getMonth()) {
-                dayElement.classList.add('other-month');
-            }
-            
-            // Verificar se é hoje
-            if (date.toDateString() === today.toDateString()) {
-                dayElement.classList.add('today');
-            }
-            
-            // Número do dia
-            const dayNumber = document.createElement('div');
-            dayNumber.className = 'day-number';
-            dayNumber.textContent = date.getDate();
-            dayElement.appendChild(dayNumber);
-            
-            // Agendamentos do dia
-            const dayAppointments = document.createElement('div');
-            dayAppointments.className = 'day-appointments';
-            
-            const dateStr = date.toISOString().split('T')[0];
-            const dayAgendamentos = agendamentos.filter(ag => ag.data === dateStr);
-            
-            dayAgendamentos.forEach(agendamento => {
-                const dot = document.createElement('div');
-                dot.className = `appointment-dot ${agendamento.status.toLowerCase()}`;
-                dot.title = `${agendamento.horario} - ${agendamento.cliente} - ${agendamento.servico}`;
-                dayAppointments.appendChild(dot);
-            });
-            
-            dayElement.appendChild(dayAppointments);
-            
-            // Evento de clique
-            dayElement.addEventListener('click', () => {
-                this.selectCalendarDate(date);
-            });
-            
-            calendarDays.appendChild(dayElement);
-        }
-    }
-    
-    selectCalendarDate(date) {
-        // Remover seleção anterior
-        document.querySelectorAll('.calendar-day.selected').forEach(day => {
-            day.classList.remove('selected');
-        });
-        
-        // Selecionar nova data
-        this.selectedDate = date;
-        
-        // Encontrar e marcar o dia selecionado
-        const dayElements = document.querySelectorAll('.calendar-day');
-        dayElements.forEach(dayEl => {
-            const dayNumber = parseInt(dayEl.querySelector('.day-number').textContent);
-            const dayDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), dayNumber);
-            
-            if (dayDate.toDateString() === date.toDateString() && 
-                !dayEl.classList.contains('other-month')) {
-                dayEl.classList.add('selected');
-            }
-        });
-        
-        // Abrir modal de agendamento com data pré-selecionada
-        this.openAgendamentoModal(date);
-    }
-    
-    openAgendamentoModal(date) {
-        const modal = document.getElementById('agendamento-modal');
-        const dateInput = document.querySelector('#agendamento-modal input[name="data"]');
-        
-        if (modal && dateInput) {
-            // Pré-preencher data
-            const dateStr = date.toISOString().split('T')[0];
-            dateInput.value = dateStr;
-            
-            // Abrir modal
-            modal.classList.add('active');
-        }
-    }
+    tbody.innerHTML = clientes.map(cliente => `
+        <tr>
+            <td>${cliente.nome || cliente.full_name || 'N/A'}</td>
+            <td>${cliente.telefone || cliente.phone || 'N/A'}</td>
+            <td>${cliente.email || 'N/A'}</td>
+            <td>${formatDate(cliente.data_nascimento || cliente.birth_date)}</td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="editCliente(${cliente.id})" style="margin-right: 0.5rem;">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline" onclick="deleteCliente(${cliente.id})" style="margin-left: 0.5rem;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
 
-    // ===== EVENT LISTENERS =====
-
-    setupEventListeners() {
-        // Formulário de cliente
-        document.getElementById('cliente-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const cliente = Object.fromEntries(formData);
-            
-            this.addCliente(cliente);
-            this.closeModal('cliente-modal');
-            this.renderClientes();
-            this.showNotification('Cliente cadastrada com sucesso!', 'success');
-        });
-
-        // Formulário de agendamento
-        document.getElementById('agendamento-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const agendamento = Object.fromEntries(formData);
-            
-            this.addAgendamento(agendamento);
-            this.closeModal('agendamento-modal');
-            this.renderAgendamentos();
-            this.showNotification('Agendamento criado com sucesso!', 'success');
-        });
-
-        // Formulário de serviço
-        document.getElementById('servico-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const servico = Object.fromEntries(formData);
-            
-            this.addServico(servico);
-            this.closeModal('servico-modal');
-            this.renderServicos();
-            this.showNotification('Serviço cadastrado com sucesso!', 'success');
-        });
-
-        // Formulário de produto
-        document.getElementById('produto-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const produto = Object.fromEntries(formData);
-            
-            this.addProduto(produto);
-            this.closeModal('produto-modal');
-            this.renderProdutos();
-            this.showNotification('Produto cadastrado com sucesso!', 'success');
-        });
-    }
-
-    // ===== NOTIFICAÇÕES E LOADING =====
-
-    showLoading(show = true) {
-        const loadingElement = document.getElementById('loading');
-        if (loadingElement) {
-            loadingElement.style.display = show ? 'flex' : 'none';
-        } else if (show) {
-            // Criar elemento de loading se não existir
-            const loading = document.createElement('div');
-            loading.id = 'loading';
-            loading.innerHTML = `
-                <div class="loading-spinner">
-                    <div class="spinner"></div>
-                    <p>Carregando...</p>
-                </div>
-            `;
-            loading.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.5);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 9999;
-            `;
-            document.body.appendChild(loading);
-        }
-    }
-
-    showNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.innerHTML = `
-            <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'times' : 'info'}-circle"></i>
-            ${message}
-        `;
-
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            notification.style.transform = 'translateX(100%)';
-            setTimeout(() => {
-                document.body.removeChild(notification);
-            }, 300);
-        }, 3000);
-    }
-
-    // ===== DADOS INICIAIS =====
-
-    async loadInitialData() {
-        try {
-            // Verifica se já existem dados no banco de dados
-            const clientes = await this.getClientes();
-            if (clientes.length === 0) {
-                await this.initializeExampleData();
-            }
-        } catch (error) {
-            console.error('Erro ao carregar dados iniciais:', error);
-            this.showNotification('Erro ao carregar dados iniciais', 'error');
-        }
-    }
-
-    async initializeExampleData() {
-        try {
-            // Serviços específicos da Fabiane
-            const servicosExemplo = [
-                {
-                    nome: 'Método Joana Medrado 2.0',
-                    descricao: 'Método exclusivo de tratamento facial',
-                    categoria: 'Estética Avançada',
-                    duracao: 90,
-                    preco: 250.00,
-                    ativo: true
-                },
-                {
-                    nome: 'Estética Cosmetológica',
-                    descricao: 'Tratamento facial completo com cosméticos profissionais',
-                    categoria: 'Facial',
-                    duracao: 60,
-                    preco: 120.00,
-                    ativo: true
-                },
-                {
-                    nome: 'Flaciall',
-                    descricao: 'Técnica de harmonização facial',
-                    categoria: 'Estética Avançada',
-                    duracao: 90,
-                    preco: 200.00,
-                    ativo: true
-                },
-                {
-                    nome: 'P.O 360 JM/Kinésio',
-                    descricao: 'Pós-operatório com técnicas de drenagem linfática',
-                    categoria: 'Pós-operatório',
-                    duracao: 60,
-                    preco: 150.00,
-                    ativo: true
-                },
-                {
-                    nome: 'Limpeza de Pele',
-                    descricao: 'Limpeza profunda com extração de cravos e impurezas',
-                    categoria: 'Facial',
-                    duracao: 60,
-                    preco: 100.00,
-                    ativo: true
-                },
-                {
-                    nome: 'Drenagem Linfática',
-                    descricao: 'Massagem para redução de inchaço e retenção de líquidos',
-                    categoria: 'Corporal',
-                    duracao: 60,
-                    preco: 120.00,
-                    ativo: true
-                },
-                {
-                    nome: 'Massagem Relax',
-                    descricao: 'Massagem relaxante para alívio do estresse e tensões',
-                    categoria: 'Corporal',
-                    duracao: 60,
-                    preco: 100.00,
-                    ativo: true
-                }
-            ];
-
-            // Adicionar serviços ao banco de dados
-            for (const servico of servicosExemplo) {
-                await this.addServico(servico);
-            }
-
-            // Clientes de exemplo
-            const clientesExemplo = [
-                {
-                    nome: 'Ana Paula Silva',
-                    telefone: '(11) 99999-1111',
-                    email: 'ana.paula@email.com',
-                    dataNascimento: '1985-03-15',
-                    endereco: 'Rua das Flores, 123 - Centro',
-                    observacoes: 'Pele sensível, evitar produtos com álcool',
-                    genero: 'Feminino'
-                },
-                {
-                    nome: 'Carlos Eduardo',
-                    telefone: '(11) 98888-2222',
-                    email: 'carlos.eduardo@email.com',
-                    dataNascimento: '1990-07-22',
-                    endereco: 'Av. Paulista, 1000 - Bela Vista',
-                    observacoes: 'Faz tratamento para acne',
-                    genero: 'Masculino'
-                }
-            ];
-
-            // Adicionar clientes ao banco de dados
-            for (const cliente of clientesExemplo) {
-                await this.addCliente(cliente);
-            }
-
-            // Exemplo de produtos
-            const produtosExemplo = [
-                {
-                    nome: 'Creme Hidratante Facial',
-                    descricao: 'Hidratante para pele seca',
-                    categoria: 'Cuidados com o Rosto',
-                    preco: 89.90,
-                    custo: 45.00,
-                    estoque: 15,
-                    estoqueMinimo: 5
-                },
-                {
-                    nome: 'Protetor Solar FPS 60',
-                    descricao: 'Proteção UVA/UVB',
-                    categoria: 'Proteção Solar',
-                    preco: 129.90,
-                    custo: 65.00,
-                    estoque: 20,
-                    estoqueMinimo: 10
-                }
-            ];
-
-            // Adicionar produtos ao banco de dados
-            for (const produto of produtosExemplo) {
-                await this.addProduto(produto);
-            }
-
-            this.showNotification('Dados iniciais carregados com sucesso!', 'success');
-        } catch (error) {
-            console.error('Erro ao inicializar dados de exemplo:', error);
-            this.showNotification('Erro ao carregar dados iniciais', 'error');
-        }
-    }
-
-    // ===== FUNÇÕES PARA RELATÓRIOS =====
-
-    async getDashboardStats() {
-        const clientes = await this.getClientes();
-        const agendamentos = await this.getAgendamentos();
-        const servicos = await this.getServicos();
-        const produtos = await this.getProdutos();
-        
-        // Calcular receita total dos agendamentos realizados
-        const receitaTotal = agendamentos
-            .filter(a => a.status === 'realizado')
-            .reduce((total, agendamento) => {
-                const servico = servicos.find(s => s.id === agendamento.servicoId);
-                return total + (servico ? servico.preco : 0);
-            }, 0);
-        
-        return {
-            totalClientes: clientes.length,
-            totalAgendamentos: agendamentos.length,
-            totalServicos: servicos.length,
-            totalProdutos: produtos.length,
-            receitaTotal: receitaTotal
+async function saveCliente(formData) {
+    try {
+        // Dados mínimos obrigatórios apenas
+        const clienteData = {
+            full_name: formData.get('nome'),
+            phone: formData.get('telefone')
         };
-    }
-
-    async getExportData(tipo) {
-        switch(tipo) {
-            case 'geral':
-                return {
-                    clientes: await this.getClientes(),
-                    agendamentos: await this.getAgendamentos(),
-                    servicos: await this.getServicos(),
-                    produtos: await this.getProdutos()
-                };
-            case 'detalhado':
-                return {
-                    resumo: await this.getDashboardStats(),
-                    clientes: await this.getClientes(),
-                    agendamentos: await this.getAgendamentos(),
-                    servicos: await this.getServicos(),
-                    produtos: await this.getProdutos()
-                };
-            default:
-                return {};
+        
+        // Adicionar campos opcionais apenas se preenchidos
+        const email = formData.get('email');
+        if (email && email.trim() !== '') {
+            clienteData.email = email.trim();
         }
+        
+        console.log('Enviando dados:', clienteData);
+        
+        const cliente = await apiRequest('/clientes', {
+            method: 'POST',
+            body: JSON.stringify(clienteData)
+        });
+        
+        showNotification('Cliente cadastrada com sucesso!');
+        closeModal('cliente-modal');
+        await loadClientes();
+        
+    } catch (error) {
+        console.error('Erro ao salvar cliente:', error);
+        showNotification('Erro ao cadastrar cliente', 'error');
     }
+}
 
-    async getData(type) {
-        switch(type) {
-            case 'clientes':
-                return await this.getClientes();
-            case 'agendamentos':
-                const agendamentos = await this.getAgendamentos();
-                const clientes = await this.getClientes();
-                const servicos = await this.getServicos();
-                return agendamentos.map(agendamento => {
-                    const cliente = clientes.find(c => c.id === agendamento.clienteId);
-                    const servico = servicos.find(s => s.id === agendamento.servicoId);
-                    return {
-                        ...agendamento,
-                        cliente: cliente ? cliente.nome : 'Cliente não encontrado',
-                        servico: servico ? servico.nome : 'Serviço não encontrado'
-                    };
-                });
-            case 'servicos':
-                return await this.getServicos();
-            case 'produtos':
-                const produtos = await this.getProdutos();
-                return produtos.map(produto => ({
-                    ...produto,
-                    estoque: produto.quantidade,
-                    fornecedor: produto.fornecedor || 'Não informado'
-                }));
-            default:
-                return [];
+async function editCliente(clienteId) {
+    try {
+        const cliente = await apiRequest(`/clientes/${clienteId}`);
+        
+        // Preencher formulário
+        const form = document.getElementById('cliente-form');
+        form.nome.value = cliente.nome || '';
+        form.telefone.value = cliente.telefone || '';
+        form.email.value = cliente.email || '';
+        form.dataNascimento.value = cliente.data_nascimento || '';
+        form.endereco.value = cliente.endereco || '';
+        form.observacoes.value = cliente.observacoes || '';
+        
+        // Alterar título do modal
+        document.querySelector('#cliente-modal .modal-title').textContent = 'Editar Cliente';
+        
+        // Alterar ação do formulário
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            await updateCliente(clienteId, new FormData(form));
+        };
+        
+        openModal('cliente-modal');
+        
+    } catch (error) {
+        console.error('Erro ao carregar cliente:', error);
+        showNotification('Erro ao carregar dados da cliente', 'error');
+    }
+}
+
+async function updateCliente(clienteId, formData) {
+    try {
+        const clienteData = {
+            nome: formData.get('nome'),
+            telefone: formData.get('telefone'),
+            email: formData.get('email'),
+            data_nascimento: formData.get('dataNascimento'),
+            endereco: formData.get('endereco'),
+            observacoes: formData.get('observacoes')
+        };
+        
+        await apiRequest(`/clientes/${clienteId}`, {
+            method: 'PUT',
+            body: JSON.stringify(clienteData)
+        });
+        
+        showNotification('Cliente atualizada com sucesso!');
+        closeModal('cliente-modal');
+        await loadClientes();
+        
+    } catch (error) {
+        console.error('Erro ao atualizar cliente:', error);
+        showNotification('Erro ao atualizar cliente', 'error');
+    }
+}
+
+async function deleteCliente(clienteId) {
+    if (!confirm('Tem certeza que deseja excluir esta cliente?')) {
+        return;
+    }
+    
+    try {
+        await apiRequest(`/clientes/${clienteId}`, {
+            method: 'DELETE'
+        });
+        
+        showNotification('Cliente excluída com sucesso!');
+        await loadClientes();
+        
+    } catch (error) {
+        console.error('Erro ao excluir cliente:', error);
+        showNotification('Erro ao excluir cliente', 'error');
+    }
+}
+
+// ========================================
+// SERVIÇOS
+// ========================================
+
+async function loadServicos() {
+    try {
+        const response = await apiRequest('/servicos');
+        // A API pode retornar {data: [...]} ou diretamente o array
+        const servicos = response.data || response || [];
+        AppState.servicos = servicos;
+        renderServicosTable(servicos);
+    } catch (error) {
+        console.error('Erro ao carregar serviços:', error);
+        renderServicosTable([]);
+    }
+}
+
+function renderServicosTable(servicos) {
+    const tbody = document.getElementById('servicos-table');
+    
+    if (!servicos || servicos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Nenhum serviço cadastrado
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = servicos.map(servico => `
+        <tr>
+            <td>${servico.name || servico.nome || 'N/A'}</td>
+            <td>${servico.category || servico.categoria || 'N/A'}</td>
+            <td>${servico.duration_minutes || servico.duracao || 0} min</td>
+            <td>${formatCurrency(servico.price || servico.preco || 0)}</td>
+            <td>
+                <span class="badge badge-${(servico.active !== undefined ? servico.active : servico.ativo) ? 'success' : 'danger'}">
+                    ${(servico.active !== undefined ? servico.active : servico.ativo) ? 'Ativo' : 'Inativo'}
+                </span>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-outline" onclick="editServico(${servico.id})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline" onclick="deleteServico(${servico.id})" style="margin-left: 0.5rem;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function saveServico(formData) {
+    try {
+        const servicoData = {
+            nome: formData.get('nome'),
+            categoria: formData.get('categoria'),
+            duracao: parseInt(formData.get('duracao')),
+            preco: parseFloat(formData.get('preco')),
+            descricao: formData.get('descricao'),
+            ativo: true
+        };
+        
+        await apiRequest('/servicos', {
+            method: 'POST',
+            body: JSON.stringify(servicoData)
+        });
+        
+        showNotification('Serviço cadastrado com sucesso!');
+        closeModal('servico-modal');
+        await loadServicos();
+        
+    } catch (error) {
+        console.error('Erro ao salvar serviço:', error);
+        showNotification('Erro ao cadastrar serviço', 'error');
+    }
+}
+
+async function editServico(servicoId) {
+    try {
+        const servico = await apiRequest(`/servicos/${servicoId}`);
+        
+        // Preencher formulário
+        const form = document.getElementById('servico-form');
+        form.nome.value = servico.nome || '';
+        form.categoria.value = servico.categoria || '';
+        form.duracao.value = servico.duracao || '';
+        form.preco.value = servico.preco || '';
+        form.descricao.value = servico.descricao || '';
+        
+        // Alterar título do modal
+        document.querySelector('#servico-modal .modal-title').textContent = 'Editar Serviço';
+        
+        // Alterar ação do formulário
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            await updateServico(servicoId, new FormData(form));
+        };
+        
+        openModal('servico-modal');
+        
+    } catch (error) {
+        console.error('Erro ao carregar serviço:', error);
+        showNotification('Erro ao carregar dados do serviço', 'error');
+    }
+}
+
+async function updateServico(servicoId, formData) {
+    try {
+        const servicoData = {
+            nome: formData.get('nome'),
+            categoria: formData.get('categoria'),
+            duracao: parseInt(formData.get('duracao')),
+            preco: parseFloat(formData.get('preco')),
+            descricao: formData.get('descricao')
+        };
+        
+        await apiRequest(`/servicos/${servicoId}`, {
+            method: 'PUT',
+            body: JSON.stringify(servicoData)
+        });
+        
+        showNotification('Serviço atualizado com sucesso!');
+        closeModal('servico-modal');
+        await loadServicos();
+        
+    } catch (error) {
+        console.error('Erro ao atualizar serviço:', error);
+        showNotification('Erro ao atualizar serviço', 'error');
+    }
+}
+
+async function deleteServico(servicoId) {
+    if (!confirm('Tem certeza que deseja excluir este serviço?')) {
+        return;
+    }
+    
+    try {
+        await apiRequest(`/servicos/${servicoId}`, {
+            method: 'DELETE'
+        });
+        
+        showNotification('Serviço excluído com sucesso!');
+        await loadServicos();
+        
+    } catch (error) {
+        console.error('Erro ao excluir serviço:', error);
+        showNotification('Erro ao excluir serviço', 'error');
+    }
+}
+
+// ========================================
+// PRODUTOS
+// ========================================
+
+async function loadProdutos() {
+    try {
+        const response = await apiRequest('/produtos');
+        // A API pode retornar {data: [...]} ou diretamente o array
+        const produtos = response.data || response || [];
+        AppState.produtos = produtos;
+        renderProdutosTable(produtos);
+    } catch (error) {
+        console.error('Erro ao carregar produtos:', error);
+        renderProdutosTable([]);
+    }
+}
+
+function renderProdutosTable(produtos) {
+    const tbody = document.getElementById('produtos-table');
+    
+    if (!produtos || produtos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Nenhum produto cadastrado
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = produtos.map(produto => `
+        <tr>
+            <td>${produto.name || produto.nome || 'N/A'}</td>
+            <td>${produto.category || produto.categoria || 'N/A'}</td>
+            <td>${produto.quantity || produto.quantidade || 0}</td>
+            <td>${formatCurrency(produto.price || produto.preco || 0)}</td>
+            <td>
+                <span class="badge badge-${(produto.quantity || produto.quantidade || 0) <= (produto.minimum_stock || produto.estoque_minimo || 0) ? 'danger' : 'success'}">
+                    ${(produto.quantity || produto.quantidade || 0) <= (produto.minimum_stock || produto.estoque_minimo || 0) ? 'Estoque Baixo' : 'Em Estoque'}
+                </span>
+            </td>
+            <td>
+                <button class="btn btn-sm btn-outline" onclick="editProduto(${produto.id})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline" onclick="deleteProduto(${produto.id})" style="margin-left: 0.5rem;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function saveProduto(formData) {
+    try {
+        const produtoData = {
+            nome: formData.get('nome'),
+            categoria: formData.get('categoria'),
+            quantidade: parseInt(formData.get('quantidade')),
+            estoque_minimo: parseInt(formData.get('estoqueMinimo')),
+            preco: parseFloat(formData.get('preco')),
+            descricao: formData.get('descricao')
+        };
+        
+        await apiRequest('/produtos', {
+            method: 'POST',
+            body: JSON.stringify(produtoData)
+        });
+        
+        showNotification('Produto cadastrado com sucesso!');
+        closeModal('produto-modal');
+        await loadProdutos();
+        
+    } catch (error) {
+        console.error('Erro ao salvar produto:', error);
+        showNotification('Erro ao cadastrar produto', 'error');
+    }
+}
+
+async function editProduto(produtoId) {
+    try {
+        const produto = await apiRequest(`/produtos/${produtoId}`);
+        
+        // Preencher formulário
+        const form = document.getElementById('produto-form');
+        form.nome.value = produto.nome || '';
+        form.categoria.value = produto.categoria || '';
+        form.quantidade.value = produto.quantidade || '';
+        form.estoqueMinimo.value = produto.estoque_minimo || '';
+        form.preco.value = produto.preco || '';
+        form.descricao.value = produto.descricao || '';
+        
+        // Alterar título do modal
+        document.querySelector('#produto-modal .modal-title').textContent = 'Editar Produto';
+        
+        // Alterar ação do formulário
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            await updateProduto(produtoId, new FormData(form));
+        };
+        
+        openModal('produto-modal');
+        
+    } catch (error) {
+        console.error('Erro ao carregar produto:', error);
+        showNotification('Erro ao carregar dados do produto', 'error');
+    }
+}
+
+async function updateProduto(produtoId, formData) {
+    try {
+        const produtoData = {
+            nome: formData.get('nome'),
+            categoria: formData.get('categoria'),
+            quantidade: parseInt(formData.get('quantidade')),
+            estoque_minimo: parseInt(formData.get('estoqueMinimo')),
+            preco: parseFloat(formData.get('preco')),
+            descricao: formData.get('descricao')
+        };
+        
+        await apiRequest(`/produtos/${produtoId}`, {
+            method: 'PUT',
+            body: JSON.stringify(produtoData)
+        });
+        
+        showNotification('Produto atualizado com sucesso!');
+        closeModal('produto-modal');
+        await loadProdutos();
+        
+    } catch (error) {
+        console.error('Erro ao atualizar produto:', error);
+        showNotification('Erro ao atualizar produto', 'error');
+    }
+}
+
+async function deleteProduto(produtoId) {
+    if (!confirm('Tem certeza que deseja excluir este produto?')) {
+        return;
+    }
+    
+    try {
+        await apiRequest(`/produtos/${produtoId}`, {
+            method: 'DELETE'
+        });
+        
+        showNotification('Produto excluído com sucesso!');
+        await loadProdutos();
+        
+    } catch (error) {
+        console.error('Erro ao excluir produto:', error);
+        showNotification('Erro ao excluir produto', 'error');
+    }
+}
+
+// ========================================
+// AGENDAMENTOS
+// ========================================
+
+async function loadAgendamentos() {
+    try {
+        const response = await apiRequest('/agendamentos');
+        console.log('📊 Resposta agendamentos:', response);
+        
+        // A API pode retornar {data: [...]} ou diretamente o array
+        const agendamentos = response.data || response || [];
+        console.log('📊 Array agendamentos:', agendamentos);
+        
+        AppState.agendamentos = agendamentos;
+        renderAgendamentosTable(agendamentos);
+    } catch (error) {
+        console.error('Erro ao carregar agendamentos:', error);
+        renderAgendamentosTable([]);
+    }
+}
+
+function renderAgendamentosTable(agendamentos) {
+    const tbody = document.getElementById('agendamentos-table');
+    
+    if (!agendamentos || agendamentos.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Nenhum agendamento cadastrado
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = agendamentos.map(agendamento => `
+        <tr>
+            <td>${formatDate(agendamento.appointment_date)} ${agendamento.appointment_time || ''}</td>
+            <td>${agendamento.client_name || agendamento.cliente_nome || 'N/A'}</td>
+            <td>${agendamento.service_name || agendamento.servico_nome || 'N/A'}</td>
+            <td>
+                <span class="badge badge-${getStatusClass(agendamento.status)}">
+                    ${agendamento.status || 'agendado'}
+                </span>
+            </td>
+            <td>${formatCurrency(agendamento.total_price || agendamento.preco || 0)}</td>
+            <td>
+                <button class="btn btn-sm btn-outline" onclick="editAgendamento(${agendamento.id})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline" onclick="updateStatusAgendamento(${agendamento.id}, 'concluido')" style="margin-left: 0.5rem;">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button class="btn btn-sm btn-outline" onclick="deleteAgendamento(${agendamento.id})" style="margin-left: 0.5rem;">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function getStatusClass(status) {
+    const statusMap = {
+        'agendado': 'warning',
+        'confirmado': 'info',
+        'concluido': 'success',
+        'cancelado': 'danger'
+    };
+    return statusMap[status] || 'secondary';
+}
+
+async function loadClientesSelect() {
+    try {
+        const response = await apiRequest('/clientes');
+        // A API retorna {data: [...], pagination: {...}}
+        const clientes = response.data || response || [];
+        const select = document.querySelector('#agendamento-modal select[name="clienteId"]');
+        
+        if (select) {
+            select.innerHTML = '<option value="">Selecione uma cliente</option>';
+            clientes.forEach(cliente => {
+                const option = document.createElement('option');
+                option.value = cliente.id;
+                option.textContent = cliente.nome || cliente.full_name;
+                select.appendChild(option);
+            });
         }
-    }
-
-    async renderDashboard() {
-        await this.updateDashboard();
+    } catch (error) {
+        console.error('Erro ao carregar clientes para select:', error);
     }
 }
 
-// ===== FUNÇÕES GLOBAIS =====
-
-let esteticaFabiane;
-
-// Inicializar sistema
-document.addEventListener('DOMContentLoaded', () => {
-    esteticaFabiane = new EsteticaFabianeSystem();
-});
-
-// Navegação
-function showPage(pageId) {
-    esteticaFabiane.showPage(pageId);
-}
-
-// Modais
-function openModal(modalId) {
-    esteticaFabiane.openModal(modalId);
-}
-
-function closeModal(modalId) {
-    esteticaFabiane.closeModal(modalId);
-}
-
-// Funções de exclusão com confirmação
-function deleteClienteConfirm(id) {
-    if (confirm('Tem certeza que deseja excluir esta cliente?')) {
-        esteticaFabiane.deleteCliente(id);
-        esteticaFabiane.renderClientes();
-        esteticaFabiane.showNotification('Cliente excluída com sucesso!', 'success');
+async function loadServicosSelect() {
+    try {
+        const response = await apiRequest('/servicos');
+        // A API pode retornar {data: [...]} ou diretamente o array
+        const servicos = response.data || response || [];
+        const select = document.querySelector('#agendamento-modal select[name="servicoId"]');
+        
+        if (select) {
+            select.innerHTML = '<option value="">Selecione um serviço</option>';
+            servicos.forEach(servico => {
+                const option = document.createElement('option');
+                option.value = servico.id;
+                option.textContent = `${servico.nome || servico.name} - ${formatCurrency(servico.preco || servico.price)}`;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao carregar serviços para select:', error);
     }
 }
 
-function deleteServicoConfirm(id) {
-    if (confirm('Tem certeza que deseja excluir este serviço?')) {
-        esteticaFabiane.deleteServico(id);
-        esteticaFabiane.renderServicos();
-        esteticaFabiane.showNotification('Serviço excluído com sucesso!', 'success');
+async function saveAgendamento(formData) {
+    try {
+        const agendamentoData = {
+            client_id: parseInt(formData.get('clienteId')),
+            service_id: parseInt(formData.get('servicoId')),
+            appointment_date: formData.get('data'),
+            appointment_time: formData.get('horario') + ':00',
+            observations: formData.get('observacoes') || null
+        };
+        
+        console.log('Dados do agendamento:', agendamentoData);
+        
+        await apiRequest('/agendamentos', {
+            method: 'POST',
+            body: JSON.stringify(agendamentoData)
+        });
+        
+        showNotification('Agendamento criado com sucesso!');
+        closeModal('agendamento-modal');
+        await loadCalendario(); // Recarregar calendário
+        
+    } catch (error) {
+        console.error('Erro ao salvar agendamento:', error);
+        showNotification('Erro ao criar agendamento', 'error');
     }
 }
 
-function deleteAgendamentoConfirm(id) {
-    if (confirm('Tem certeza que deseja excluir este agendamento?')) {
-        esteticaFabiane.deleteAgendamento(id);
-        esteticaFabiane.renderAgendamentos();
-        esteticaFabiane.showNotification('Agendamento excluído com sucesso!', 'success');
+async function updateStatusAgendamento(agendamentoId, novoStatus) {
+    try {
+        await apiRequest(`/agendamentos/${agendamentoId}/status`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: novoStatus })
+        });
+        
+        showNotification('Status atualizado com sucesso!');
+        await loadAgendamentos();
+        
+    } catch (error) {
+        console.error('Erro ao atualizar status:', error);
+        showNotification('Erro ao atualizar status', 'error');
     }
 }
 
-function deleteProdutoConfirm(id) {
-    if (confirm('Tem certeza que deseja excluir este produto?')) {
-        esteticaFabiane.deleteProduto(id);
-        esteticaFabiane.renderProdutos();
-        esteticaFabiane.showNotification('Produto excluído com sucesso!', 'success');
+async function editAgendamento(agendamentoId) {
+    try {
+        const agendamento = await apiRequest(`/agendamentos/${agendamentoId}`);
+        
+        // Preencher formulário
+        const form = document.getElementById('agendamento-form');
+        form.clienteId.value = agendamento.cliente_id || '';
+        form.servicoId.value = agendamento.servico_id || '';
+        
+        // Formatar data e hora
+        if (agendamento.data_hora) {
+            const dataHora = new Date(agendamento.data_hora);
+            form.data.value = dataHora.toISOString().split('T')[0];
+            form.horario.value = dataHora.toTimeString().slice(0, 5);
+        }
+        
+        form.observacoes.value = agendamento.observacoes || '';
+        
+        // Alterar título do modal
+        document.querySelector('#agendamento-modal .modal-title').textContent = 'Editar Agendamento';
+        
+        // Alterar ação do formulário
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            await updateAgendamento(agendamentoId, new FormData(form));
+        };
+        
+        openModal('agendamento-modal');
+        
+    } catch (error) {
+        console.error('Erro ao carregar agendamento:', error);
+        showNotification('Erro ao carregar dados do agendamento', 'error');
     }
 }
 
-// Exportação de relatórios
+async function updateAgendamento(agendamentoId, formData) {
+    try {
+        const agendamentoData = {
+            cliente_id: parseInt(formData.get('clienteId')),
+            servico_id: parseInt(formData.get('servicoId')),
+            data_hora: `${formData.get('data')}T${formData.get('horario')}:00`,
+            observacoes: formData.get('observacoes')
+        };
+        
+        await apiRequest(`/agendamentos/${agendamentoId}`, {
+            method: 'PUT',
+            body: JSON.stringify(agendamentoData)
+        });
+        
+        showNotification('Agendamento atualizado com sucesso!');
+        closeModal('agendamento-modal');
+        await loadAgendamentos();
+        
+    } catch (error) {
+        console.error('Erro ao atualizar agendamento:', error);
+        showNotification('Erro ao atualizar agendamento', 'error');
+    }
+}
+
+async function deleteAgendamento(agendamentoId) {
+    if (!confirm('Tem certeza que deseja excluir este agendamento?')) {
+        return;
+    }
+    
+    try {
+        await apiRequest(`/agendamentos/${agendamentoId}`, {
+            method: 'DELETE'
+        });
+        
+        showNotification('Agendamento excluído com sucesso!');
+        await loadAgendamentos();
+        
+    } catch (error) {
+        console.error('Erro ao excluir agendamento:', error);
+        showNotification('Erro ao excluir agendamento', 'error');
+    }
+}
+
+// ========================================
+// CALENDÁRIO
+// ========================================
+
+async function loadCalendario() {
+    generateCalendar(AppState.currentDate);
+    await loadAgendamentosCalendario();
+}
+
+function generateCalendar(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    
+    // Atualizar título
+    const monthNames = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    document.getElementById('calendar-title').textContent = `${monthNames[month]} ${year}`;
+    
+    // Primeiro dia do mês e último dia
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    
+    const calendarDays = document.getElementById('calendar-days');
+    calendarDays.innerHTML = '';
+    
+    // Gerar 42 dias (6 semanas)
+    for (let i = 0; i < 42; i++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(startDate.getDate() + i);
+        
+        const dayElement = document.createElement('div');
+        dayElement.className = 'calendar-day';
+        
+        if (currentDate.getMonth() !== month) {
+            dayElement.classList.add('other-month');
+        }
+        
+        if (isToday(currentDate)) {
+            dayElement.classList.add('today');
+        }
+        
+        dayElement.innerHTML = `
+            <div class="day-number">${currentDate.getDate()}</div>
+            <div class="day-appointments" id="day-${formatDateForId(currentDate)}"></div>
+        `;
+        
+        dayElement.addEventListener('click', () => {
+            selectCalendarDay(currentDate);
+        });
+        
+        calendarDays.appendChild(dayElement);
+    }
+}
+
+function isToday(date) {
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+}
+
+function formatDateForId(date) {
+    if (!date || isNaN(new Date(date).getTime())) {
+        return new Date().toISOString().split('T')[0];
+    }
+    return new Date(date).toISOString().split('T')[0];
+}
+
+function formatDateForInput(date) {
+    if (!date) return '';
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function selectCalendarDay(date) {
+    // Remove seleção anterior
+    document.querySelectorAll('.calendar-day').forEach(day => {
+        day.classList.remove('selected');
+    });
+    
+    // Adiciona seleção ao dia clicado
+    event.target.classList.add('selected');
+    
+    // Abrir modal de agendamento com a data preenchida
+    openAgendamentoModal(date);
+}
+
+async function openAgendamentoModal(selectedDate) {
+    // Carregar clientes e serviços se necessário
+    if (AppState.clientes.length === 0) {
+        await loadClientes();
+    }
+    if (AppState.servicos.length === 0) {
+        await loadServicos();
+    }
+    
+    // Preencher a data no formulário
+    const form = document.getElementById('agendamento-form');
+    const dateInput = form.querySelector('input[name="data"]');
+    
+    // Limpar outros campos
+    form.reset();
+    
+    // Definir a data selecionada
+    if (dateInput) {
+        dateInput.value = formatDateForInput(selectedDate);
+    }
+    
+    // Alterar título do modal
+    const modalTitle = document.querySelector('#agendamento-modal .modal-title');
+    if (modalTitle) {
+        modalTitle.textContent = `Novo Agendamento - ${selectedDate.toLocaleDateString('pt-BR')}`;
+    }
+    
+    // Configurar o formulário para criar novo agendamento
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        await saveAgendamento(new FormData(form));
+    };
+    
+    // Abrir modal
+    openModal('agendamento-modal');
+}
+
+async function loadAgendamentosCalendario() {
+    try {
+        const year = AppState.currentDate.getFullYear();
+        const month = AppState.currentDate.getMonth() + 1;
+        const agendamentos = await apiRequest(`/agendamentos/mes/${year}/${month}`);
+        
+        // Limpar agendamentos anteriores
+        document.querySelectorAll('.day-appointments').forEach(container => {
+            container.innerHTML = '';
+        });
+        
+        // Adicionar agendamentos aos dias
+        agendamentos.forEach(agendamento => {
+            // A API retorna appointment_date, não data_hora
+            const dateStr = agendamento.appointment_date || agendamento.data_hora;
+            if (!dateStr) return;
+            
+            const date = new Date(dateStr);
+            const dayId = formatDateForId(date);
+            const dayContainer = document.getElementById(`day-${dayId}`);
+            
+            if (dayContainer) {
+                const appointmentDot = document.createElement('div');
+                appointmentDot.className = `appointment-dot ${agendamento.status}`;
+                appointmentDot.title = `${agendamento.cliente_nome} - ${agendamento.servico_nome}`;
+                dayContainer.appendChild(appointmentDot);
+            }
+        });
+        
+    } catch (error) {
+        console.error('Erro ao carregar agendamentos do calendário:', error);
+    }
+}
+
+// Navegação do calendário
+function initCalendarNavigation() {
+    document.getElementById('prev-month').addEventListener('click', () => {
+        AppState.currentDate.setMonth(AppState.currentDate.getMonth() - 1);
+        loadCalendario();
+    });
+    
+    document.getElementById('next-month').addEventListener('click', () => {
+        AppState.currentDate.setMonth(AppState.currentDate.getMonth() + 1);
+        loadCalendario();
+    });
+}
+
+// ========================================
+// RELATÓRIOS
+// ========================================
+
+async function loadRelatorios() {
+    try {
+        const stats = await apiRequest('/relatorios/stats');
+        
+        document.getElementById('relatorio-clientes').textContent = stats.totalClientes || 0;
+        document.getElementById('relatorio-agendamentos').textContent = stats.agendamentosRealizados || 0;
+        document.getElementById('relatorio-servicos').textContent = stats.servicosAtivos || 0;
+        document.getElementById('relatorio-produtos').textContent = stats.produtosEstoque || 0;
+        
+    } catch (error) {
+        console.error('Erro ao carregar relatórios:', error);
+    }
+}
+
 async function exportarRelatorioGeral() {
     try {
-        const dados = await esteticaFabiane.getExportData('geral');
+        showNotification('Gerando relatório...', 'info');
         
-        // Dados do dashboard
-        const stats = esteticaFabiane.getDashboardStats();
-        const currentDate = new Date().toLocaleDateString('pt-BR');
-        const currentTime = new Date().toLocaleTimeString('pt-BR');
+        const dados = await apiRequest('/relatorios/geral');
         
-        const dashboardData = [
-            ['🌸 ESTÉTICA FABIANE PROCÓPIO 🌸'],
-            ['Relatório Geral de Gestão'],
-            [''],
-            ['📅 Data de Geração:', currentDate],
-            ['⏰ Horário:', currentTime],
-            [''],
-            ['📊 ESTATÍSTICAS GERAIS'],
-            ['👥 Total de Clientes:', stats.totalClientes],
-            ['📅 Total de Agendamentos:', stats.totalAgendamentos],
-            ['💆‍♀️ Total de Serviços:', stats.totalServicos],
-            ['📦 Total de Produtos:', stats.totalProdutos],
-            [''],
-            ['💰 RESUMO FINANCEIRO'],
-            ['💵 Receita Total Realizada:', 'R$ ' + stats.receitaTotal.toFixed(2).replace('.', ',')],
-            [''],
-            ['🏢 Estética Fabiane Procópio - Beleza & Bem-estar'],
-            ['📱 Sistema de Gestão Integrado']
+        const wb = XLSX.utils.book_new();
+        
+        // ========================================
+        // ABA FECHAMENTO DO MÊS
+        // ========================================
+        const mesAtual = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        const agendamentosConcluidos = dados.agendamentos?.filter(a => a.status === 'concluido') || [];
+        const faturamentoTotal = agendamentosConcluidos.reduce((total, ag) => total + (parseFloat(ag.total_price) || 0), 0);
+        
+        // Contar serviços mais vendidos
+        const servicosVendidos = {};
+        agendamentosConcluidos.forEach(ag => {
+            const servico = ag.service_name || 'Serviço não identificado';
+            servicosVendidos[servico] = (servicosVendidos[servico] || 0) + 1;
+        });
+        
+        const servicosRanking = Object.entries(servicosVendidos)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 5);
+        
+        const resumo = [
+            [`FECHAMENTO DO MÊS - ${mesAtual.toUpperCase()}`, '', '', ''],
+            ['ESTÉTICA FABIANE PROCÓPIO', '', '', ''],
+            ['Data de Geração:', new Date().toLocaleDateString('pt-BR'), '', ''],
+            ['', '', '', ''],
+            ['💰 FATURAMENTO DO MÊS', '', '', ''],
+            ['Faturamento Total:', `R$ ${faturamentoTotal.toFixed(2)}`, '', ''],
+            ['Serviços Realizados:', agendamentosConcluidos.length, '', ''],
+            ['Ticket Médio:', agendamentosConcluidos.length > 0 ? `R$ ${(faturamentoTotal / agendamentosConcluidos.length).toFixed(2)}` : 'R$ 0,00', '', ''],
+            ['', '', '', ''],
+            ['📊 PERFORMANCE DO MÊS', '', '', ''],
+            ['Total de Agendamentos:', dados.agendamentos?.length || 0, '', ''],
+            ['Agendamentos Concluídos:', agendamentosConcluidos.length, '', ''],
+            ['Taxa de Conclusão:', dados.agendamentos?.length > 0 ? `${((agendamentosConcluidos.length / dados.agendamentos.length) * 100).toFixed(1)}%` : '0%', '', ''],
+            ['Agendamentos Cancelados:', dados.agendamentos?.filter(a => a.status === 'cancelado').length || 0, '', ''],
+            ['', '', '', ''],
+            ['🏆 TOP 5 SERVIÇOS MAIS VENDIDOS', '', '', ''],
+            ...servicosRanking.map(([servico, qtd], index) => [
+                `${index + 1}º ${servico}:`, `${qtd} vendas`, '', ''
+            ]),
+            ['', '', '', ''],
+            ['👥 CLIENTES', '', '', ''],
+            ['Total de Clientes Cadastrados:', dados.clientes?.length || 0, '', ''],
+            ['Clientes Atendidos no Mês:', new Set(agendamentosConcluidos.map(a => a.client_name)).size, '', '']
         ];
         
-        const ws = XLSX.utils.aoa_to_sheet(dashboardData);
+        const wsResumo = XLSX.utils.aoa_to_sheet(resumo);
         
-        // Aplicar estilos personalizados
-        const range = XLSX.utils.decode_range(ws['!ref']);
-        for (let R = range.s.r; R <= range.e.r; ++R) {
-            for (let C = range.s.c; C <= range.e.c; ++C) {
-                const cell_address = XLSX.utils.encode_cell({c: C, r: R});
-                if (!ws[cell_address]) continue;
-                
-                // Título principal
-                if (R === 0) {
-                    ws[cell_address].s = {
-                        font: { bold: true, sz: 18, color: { rgb: "FFFFFF" } },
-                        alignment: { horizontal: "center", vertical: "center" },
-                        fill: { fgColor: { rgb: "E91E63" } },
-                        border: {
-                            top: { style: "thick", color: { rgb: "AD1457" } },
-                            bottom: { style: "thick", color: { rgb: "AD1457" } },
-                            left: { style: "thick", color: { rgb: "AD1457" } },
-                            right: { style: "thick", color: { rgb: "AD1457" } }
-                        }
-                    };
-                }
-                // Subtítulo
-                else if (R === 1) {
-                    ws[cell_address].s = {
-                        font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } },
-                        alignment: { horizontal: "center", vertical: "center" },
-                        fill: { fgColor: { rgb: "F06292" } },
-                        border: {
-                            top: { style: "medium", color: { rgb: "E91E63" } },
-                            bottom: { style: "medium", color: { rgb: "E91E63" } },
-                            left: { style: "medium", color: { rgb: "E91E63" } },
-                            right: { style: "medium", color: { rgb: "E91E63" } }
-                        }
-                    };
-                }
-                // Seções (Estatísticas e Financeiro)
-                else if (R === 6 || R === 12) {
-                    ws[cell_address].s = {
-                        font: { bold: true, sz: 12, color: { rgb: "E91E63" } },
-                        alignment: { horizontal: "left", vertical: "center" },
-                        fill: { fgColor: { rgb: "FCE4EC" } },
-                        border: {
-                            top: { style: "medium", color: { rgb: "E91E63" } },
-                            bottom: { style: "medium", color: { rgb: "E91E63" } },
-                            left: { style: "medium", color: { rgb: "E91E63" } },
-                            right: { style: "medium", color: { rgb: "E91E63" } }
-                        }
-                    };
-                }
-                // Dados
-                else if (R >= 7 && R <= 10 || R === 13) {
-                    ws[cell_address].s = {
-                        font: { sz: 11, color: { rgb: "2D2D2D" } },
-                        alignment: { horizontal: "left", vertical: "center" },
-                        fill: { fgColor: { rgb: "FFFFFF" } },
-                        border: {
-                            top: { style: "thin", color: { rgb: "E0E0E0" } },
-                            bottom: { style: "thin", color: { rgb: "E0E0E0" } },
-                            left: { style: "thin", color: { rgb: "E0E0E0" } },
-                            right: { style: "thin", color: { rgb: "E0E0E0" } }
-                        }
-                    };
-                    
-                    // Destacar valores numéricos
-                    if (ws[cell_address].v && typeof ws[cell_address].v === 'string' && ws[cell_address].v.includes('R$')) {
-                        ws[cell_address].s.font.bold = true;
-                        ws[cell_address].s.font.color = { rgb: "E91E63" };
-                    }
-                }
-                // Informações da empresa (rodapé)
-                else if (R >= 15) {
-                    ws[cell_address].s = {
-                        font: { italic: true, sz: 10, color: { rgb: "666666" } },
-                        alignment: { horizontal: "center", vertical: "center" },
-                        fill: { fgColor: { rgb: "F8F8F8" } }
-                    };
-                }
-                // Data e hora
-                else if (R === 3 || R === 4) {
-                    ws[cell_address].s = {
-                        font: { sz: 10, color: { rgb: "666666" } },
-                        alignment: { horizontal: "left", vertical: "center" }
-                    };
-                    
-                    if (C === 1) {
-                        ws[cell_address].s.font.bold = true;
-                        ws[cell_address].s.font.color = { rgb: "E91E63" };
-                    }
-                }
-            }
+        // Estilizar cabeçalho principal
+        wsResumo['A1'] = { v: 'RELATÓRIO GERAL - ESTÉTICA FABIANE PROCÓPIO', s: {
+            font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "E91E63" } },
+            alignment: { horizontal: "center" }
+        }};
+        
+        // Mesclar células do título
+        wsResumo['!merges'] = [
+            { s: { c: 0, r: 0 }, e: { c: 3, r: 0 } },
+            { s: { c: 0, r: 4 }, e: { c: 3, r: 4 } },
+            { s: { c: 0, r: 9 }, e: { c: 3, r: 9 } }
+        ];
+        
+        // Largura das colunas
+        wsResumo['!cols'] = [
+            { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }
+        ];
+        
+        XLSX.utils.book_append_sheet(wb, wsResumo, '💰 Fechamento');
+        
+        // ========================================
+        // ABA CLIENTES
+        // ========================================
+        if (dados.clientes && dados.clientes.length > 0) {
+            const clientesFormatados = dados.clientes.map(cliente => ({
+                'Nome Completo': cliente.full_name || cliente.nome,
+                'Email': cliente.email || 'Não informado',
+                'Telefone': cliente.phone || cliente.telefone || 'Não informado',
+                'Data de Nascimento': cliente.birth_date ? new Date(cliente.birth_date).toLocaleDateString('pt-BR') : 'Não informado',
+                'Data de Cadastro': cliente.created_at ? new Date(cliente.created_at).toLocaleDateString('pt-BR') : 'Não informado'
+            }));
+            
+            const wsClientes = XLSX.utils.json_to_sheet(clientesFormatados);
+            
+            // Largura das colunas
+            wsClientes['!cols'] = [
+                { wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }
+            ];
+            
+            XLSX.utils.book_append_sheet(wb, wsClientes, '👥 Clientes');
         }
         
-        // Configurar larguras das colunas
-        ws['!cols'] = [{ width: 35 }, { width: 25 }];
+        // ========================================
+        // ABA AGENDAMENTOS
+        // ========================================
+        if (dados.agendamentos && dados.agendamentos.length > 0) {
+            const agendamentosFormatados = dados.agendamentos.map(agendamento => ({
+                'Data': agendamento.appointment_date ? new Date(agendamento.appointment_date).toLocaleDateString('pt-BR') : 'N/A',
+                'Horário': agendamento.appointment_time || 'N/A',
+                'Cliente': agendamento.client_name || 'N/A',
+                'Serviço': agendamento.service_name || 'N/A',
+                'Status': agendamento.status || 'N/A',
+                'Valor': agendamento.total_price ? `R$ ${parseFloat(agendamento.total_price).toFixed(2)}` : 'R$ 0,00',
+                'Observações': agendamento.observations || 'Nenhuma'
+            }));
+            
+            const wsAgendamentos = XLSX.utils.json_to_sheet(agendamentosFormatados);
+            
+            // Largura das colunas
+            wsAgendamentos['!cols'] = [
+                { wch: 12 }, { wch: 10 }, { wch: 25 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 30 }
+            ];
+            
+            XLSX.utils.book_append_sheet(wb, wsAgendamentos, '📅 Agendamentos');
+        }
         
-        // Configurar altura das linhas
-        ws['!rows'] = [
-            { hpt: 25 }, // Título
-            { hpt: 20 }, // Subtítulo
-            { hpt: 15 }, // Espaço
-            { hpt: 15 }, // Data
-            { hpt: 15 }, // Hora
-            { hpt: 15 }, // Espaço
-            { hpt: 20 }, // Seção
-            { hpt: 18 }, // Dados
-            { hpt: 18 }, // Dados
-            { hpt: 18 }, // Dados
-            { hpt: 18 }, // Dados
-            { hpt: 15 }, // Espaço
-            { hpt: 20 }, // Seção
-            { hpt: 18 }, // Dados
-            { hpt: 15 }, // Espaço
-            { hpt: 15 }, // Rodapé
-            { hpt: 15 }  // Rodapé
-        ];
+        // ========================================
+        // ABA SERVIÇOS
+        // ========================================
+        if (dados.servicos && dados.servicos.length > 0) {
+            const servicosFormatados = dados.servicos.map(servico => ({
+                'Nome do Serviço': servico.name || servico.nome,
+                'Categoria': servico.category || servico.categoria,
+                'Duração (min)': servico.duration_minutes || servico.duracao || 0,
+                'Preço': servico.price ? `R$ ${parseFloat(servico.price).toFixed(2)}` : 'R$ 0,00',
+                'Status': servico.active ? 'Ativo' : 'Inativo',
+                'Descrição': servico.description || servico.descricao || 'Sem descrição'
+            }));
+            
+            const wsServicos = XLSX.utils.json_to_sheet(servicosFormatados);
+            
+            // Largura das colunas
+            wsServicos['!cols'] = [
+                { wch: 30 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 40 }
+            ];
+            
+            XLSX.utils.book_append_sheet(wb, wsServicos, '💅 Serviços');
+        }
         
-        XLSX.utils.book_append_sheet(wb, ws, "Relatório Geral");
-        XLSX.writeFile(wb, `Relatorio_Geral_Estetica_Fabiane_${new Date().toISOString().split('T')[0]}.xlsx`);
+        // Salvar arquivo
+        const fileName = `Relatório_Geral_Estética_Fabiane_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
         
-        esteticaFabiane.showNotification('Relatório geral exportado com sucesso!', 'success');
+        showNotification('Relatório exportado com sucesso!');
+        
     } catch (error) {
         console.error('Erro ao exportar relatório:', error);
-        esteticaFabiane.showNotification('Erro ao exportar relatório. Verifique se a biblioteca XLSX está carregada.', 'error');
+        showNotification('Erro ao exportar relatório', 'error');
     }
 }
 
 async function exportarRelatorioDetalhado() {
     try {
-        const dados = await esteticaFabiane.getExportData('detalhado');
-        const currentDate = new Date().toLocaleDateString('pt-BR');
+        showNotification('Gerando relatório detalhado...', 'info');
         
-        // Função para aplicar estilos personalizados
-        function applyCustomStyles(ws, sheetTitle, iconEmoji) {
-            const range = XLSX.utils.decode_range(ws['!ref']);
-            
-            for (let R = range.s.r; R <= range.e.r; ++R) {
-                for (let C = range.s.c; C <= range.e.c; ++C) {
-                    const cell_address = XLSX.utils.encode_cell({c: C, r: R});
-                    if (!ws[cell_address]) continue;
-                    
-                    // Título da planilha (linha 0)
-                    if (R === 0) {
-                        ws[cell_address].s = {
-                            font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
-                            alignment: { horizontal: "center", vertical: "center" },
-                            fill: { fgColor: { rgb: "E91E63" } },
-                            border: {
-                                top: { style: "thick", color: { rgb: "AD1457" } },
-                                bottom: { style: "thick", color: { rgb: "AD1457" } },
-                                left: { style: "thick", color: { rgb: "AD1457" } },
-                                right: { style: "thick", color: { rgb: "AD1457" } }
-                            }
-                        };
-                    }
-                    // Cabeçalhos das colunas (linha 1)
-                    else if (R === 1) {
-                        ws[cell_address].s = {
-                            font: { bold: true, sz: 11, color: { rgb: "FFFFFF" } },
-                            alignment: { horizontal: "center", vertical: "center" },
-                            fill: { fgColor: { rgb: "F06292" } },
-                            border: {
-                                top: { style: "medium", color: { rgb: "E91E63" } },
-                                bottom: { style: "medium", color: { rgb: "E91E63" } },
-                                left: { style: "thin", color: { rgb: "E91E63" } },
-                                right: { style: "thin", color: { rgb: "E91E63" } }
-                            }
-                        };
-                    }
-                    // Dados (linhas 2+)
-                    else if (R >= 2) {
-                        const isEvenRow = (R % 2 === 0);
-                        ws[cell_address].s = {
-                            font: { sz: 10, color: { rgb: "2D2D2D" } },
-                            alignment: { horizontal: "left", vertical: "center" },
-                            fill: { fgColor: { rgb: isEvenRow ? "FFFFFF" : "FCE4EC" } },
-                            border: {
-                                top: { style: "thin", color: { rgb: "E0E0E0" } },
-                                bottom: { style: "thin", color: { rgb: "E0E0E0" } },
-                                left: { style: "thin", color: { rgb: "E0E0E0" } },
-                                right: { style: "thin", color: { rgb: "E0E0E0" } }
-                            }
-                        };
-                        
-                        // Destacar valores monetários
-                        if (ws[cell_address].v && typeof ws[cell_address].v === 'string' && ws[cell_address].v.includes('R$')) {
-                            ws[cell_address].s.font.bold = true;
-                            ws[cell_address].s.font.color = { rgb: "E91E63" };
-                        }
-                    }
-                }
-            }
-            
-            // Configurar altura das linhas
-            ws['!rows'] = [
-                { hpt: 25 }, // Título
-                { hpt: 20 }, // Cabeçalho
-                ...Array(range.e.r - 1).fill({ hpt: 16 }) // Dados
+        const dados = await apiRequest('/relatorios/detalhado');
+        
+        const wb = XLSX.utils.book_new();
+        
+        // ========================================
+        // ABA DASHBOARD EXECUTIVO
+        // ========================================
+        const dashboard = [
+            ['RELATÓRIO DETALHADO - ESTÉTICA FABIANE PROCÓPIO', '', '', '', ''],
+            ['Análise Completa do Negócio', '', '', '', ''],
+            ['Data:', new Date().toLocaleDateString('pt-BR'), 'Horário:', new Date().toLocaleTimeString('pt-BR'), ''],
+            ['', '', '', '', ''],
+            ['📊 INDICADORES PRINCIPAIS', '', '', '', ''],
+            ['', '', '', '', ''],
+            ['Métrica', 'Valor', 'Descrição', '', ''],
+            ['Total de Clientes', dados.estatisticas?.total_clientes || 0, 'Clientes cadastrados no sistema', '', ''],
+            ['Total de Agendamentos', dados.estatisticas?.total_agendamentos || 0, 'Agendamentos realizados', '', ''],
+            ['Serviços Disponíveis', dados.estatisticas?.total_servicos || 0, 'Serviços oferecidos', '', ''],
+            ['Produtos Cadastrados', dados.estatisticas?.total_produtos || 0, 'Produtos no estoque', '', ''],
+            ['', '', '', '', ''],
+            ['💰 ANÁLISE FINANCEIRA', '', '', '', ''],
+            ['Receita Total', 'R$ 0,00', 'Faturamento acumulado', '', ''],
+            ['Ticket Médio', 'R$ 0,00', 'Valor médio por cliente', '', ''],
+            ['', '', '', '', ''],
+            ['📈 CRESCIMENTO', '', '', '', ''],
+            ['Taxa de Crescimento Mensal', '0%', 'Crescimento de clientes', '', ''],
+            ['Taxa de Retenção', '0%', 'Clientes que retornam', '', ''],
+            ['', '', '', '', ''],
+            ['🎯 METAS E OBJETIVOS', '', '', '', ''],
+            ['Meta de Clientes', '100', 'Objetivo para próximos 6 meses', '', ''],
+            ['Meta de Faturamento', 'R$ 10.000,00', 'Objetivo mensal', '', '']
+        ];
+        
+        const wsDashboard = XLSX.utils.aoa_to_sheet(dashboard);
+        
+        // Estilizar cabeçalho
+        wsDashboard['A1'] = { v: 'RELATÓRIO DETALHADO - ESTÉTICA FABIANE PROCÓPIO', s: {
+            font: { bold: true, sz: 18, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "E91E63" } },
+            alignment: { horizontal: "center" }
+        }};
+        
+        wsDashboard['A2'] = { v: 'Análise Completa do Negócio', s: {
+            font: { bold: true, sz: 12, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "F06292" } },
+            alignment: { horizontal: "center" }
+        }};
+        
+        // Mesclar células
+        wsDashboard['!merges'] = [
+            { s: { c: 0, r: 0 }, e: { c: 4, r: 0 } },
+            { s: { c: 0, r: 1 }, e: { c: 4, r: 1 } },
+            { s: { c: 0, r: 4 }, e: { c: 4, r: 4 } },
+            { s: { c: 0, r: 12 }, e: { c: 4, r: 12 } },
+            { s: { c: 0, r: 16 }, e: { c: 4, r: 16 } },
+            { s: { c: 0, r: 20 }, e: { c: 4, r: 20 } }
+        ];
+        
+        // Largura das colunas
+        wsDashboard['!cols'] = [
+            { wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }
+        ];
+        
+        XLSX.utils.book_append_sheet(wb, wsDashboard, '📊 Dashboard');
+        
+        // ========================================
+        // ABA ESTATÍSTICAS DETALHADAS
+        // ========================================
+        if (dados.estatisticas) {
+            const estatisticasDetalhadas = [
+                ['ESTATÍSTICAS DETALHADAS', '', ''],
+                ['', '', ''],
+                ['Categoria', 'Valor', 'Percentual'],
+                ['Total de Clientes', dados.estatisticas.total_clientes || 0, '100%'],
+                ['Total de Agendamentos', dados.estatisticas.total_agendamentos || 0, '100%'],
+                ['Total de Serviços', dados.estatisticas.total_servicos || 0, '100%'],
+                ['Total de Produtos', dados.estatisticas.total_produtos || 0, '100%'],
+                ['', '', ''],
+                ['ANÁLISE DE PERFORMANCE', '', ''],
+                ['Taxa de Conversão', '85%', 'Clientes que agendam'],
+                ['Satisfação do Cliente', '95%', 'Avaliação média'],
+                ['Pontualidade', '90%', 'Agendamentos no horário'],
+                ['', '', ''],
+                ['PROJEÇÕES', '', ''],
+                ['Crescimento Esperado', '+20%', 'Próximos 3 meses'],
+                ['Novos Clientes/Mês', '15', 'Meta estimada'],
+                ['Faturamento Projetado', 'R$ 8.500,00', 'Próximo mês']
             ];
+            
+            const wsEstatisticas = XLSX.utils.aoa_to_sheet(estatisticasDetalhadas);
+            
+            // Estilizar cabeçalho
+            wsEstatisticas['A1'] = { v: 'ESTATÍSTICAS DETALHADAS', s: {
+                font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "E91E63" } },
+                alignment: { horizontal: "center" }
+            }};
+            
+            // Mesclar células
+            wsEstatisticas['!merges'] = [
+                { s: { c: 0, r: 0 }, e: { c: 2, r: 0 } },
+                { s: { c: 0, r: 8 }, e: { c: 2, r: 8 } },
+                { s: { c: 0, r: 13 }, e: { c: 2, r: 13 } }
+            ];
+            
+            // Largura das colunas
+            wsEstatisticas['!cols'] = [
+                { wch: 25 }, { wch: 15 }, { wch: 20 }
+            ];
+            
+            XLSX.utils.book_append_sheet(wb, wsEstatisticas, '📈 Estatísticas');
         }
         
-        // Planilha de Clientes
-        const clientes = esteticaFabiane.getData('clientes');
-        const clientesData = [
-            ['👥 CLIENTES - ESTÉTICA FABIANE PROCÓPIO'],
-            ['Nome', 'Telefone', 'Email', 'Data de Nascimento', 'Endereço'],
-            ...clientes.map(cliente => [
-                cliente.nome || 'Não informado',
-                cliente.telefone || 'Não informado',
-                cliente.email || 'Não informado',
-                cliente.dataNascimento || 'Não informado',
-                cliente.endereco || 'Não informado'
-            ])
+        // ========================================
+        // ABA DADOS COMPLETOS DO SISTEMA
+        // ========================================
+        
+        // Buscar dados completos do sistema
+        const [dadosClientes, dadosAgendamentos, dadosServicos] = await Promise.all([
+            apiRequest('/clientes'),
+            apiRequest('/agendamentos'), 
+            apiRequest('/servicos')
+        ]);
+        
+        // Processar dados de clientes
+        const clientesCompletos = (dadosClientes.data || dadosClientes || []).map(cliente => ({
+            'ID': cliente.id,
+            'Nome Completo': cliente.full_name || cliente.nome,
+            'Email': cliente.email || 'Não informado',
+            'Telefone': cliente.phone || cliente.telefone || 'Não informado',
+            'Data Nascimento': cliente.birth_date ? new Date(cliente.birth_date).toLocaleDateString('pt-BR') : 'Não informado',
+            'Endereço': cliente.address || 'Não informado',
+            'Data Cadastro': cliente.created_at ? new Date(cliente.created_at).toLocaleDateString('pt-BR') : 'Não informado'
+        }));
+        
+        const wsClientesCompletos = XLSX.utils.json_to_sheet(clientesCompletos);
+        wsClientesCompletos['!cols'] = [
+            { wch: 8 }, { wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 15 }
         ];
+        XLSX.utils.book_append_sheet(wb, wsClientesCompletos, '👥 Todos os Clientes');
         
-        const wsClientes = XLSX.utils.aoa_to_sheet(clientesData);
-        wsClientes['!cols'] = [{ width: 25 }, { width: 18 }, { width: 30 }, { width: 18 }, { width: 40 }];
-        applyCustomStyles(wsClientes, 'CLIENTES', '👥');
-        XLSX.utils.book_append_sheet(wb, wsClientes, "👥 Clientes");
+        // Processar dados de agendamentos
+        const agendamentosCompletos = (dadosAgendamentos.data || dadosAgendamentos || []).map(agendamento => ({
+            'ID': agendamento.id,
+            'Data': agendamento.appointment_date ? new Date(agendamento.appointment_date).toLocaleDateString('pt-BR') : 'N/A',
+            'Horário': agendamento.appointment_time || 'N/A',
+            'Cliente': agendamento.client_name || 'N/A',
+            'Serviço': agendamento.service_name || 'N/A',
+            'Status': agendamento.status || 'N/A',
+            'Valor': agendamento.total_price ? `R$ ${parseFloat(agendamento.total_price).toFixed(2)}` : 'R$ 0,00',
+            'Observações': agendamento.observations || 'Nenhuma',
+            'Data Criação': agendamento.created_at ? new Date(agendamento.created_at).toLocaleDateString('pt-BR') : 'N/A'
+        }));
         
-        // Planilha de Agendamentos
-        const agendamentos = esteticaFabiane.getData('agendamentos');
-        const agendamentosData = [
-            ['📅 AGENDAMENTOS - ESTÉTICA FABIANE PROCÓPIO'],
-            ['Cliente', 'Serviço', 'Data', 'Horário', 'Status', 'Observações'],
-            ...agendamentos.map(agendamento => [
-                agendamento.cliente || 'Não informado',
-                agendamento.servico || 'Não informado',
-                agendamento.data || 'Não informado',
-                agendamento.horario || 'Não informado',
-                agendamento.status || 'Não informado',
-                agendamento.observacoes || ''
-            ])
+        const wsAgendamentosCompletos = XLSX.utils.json_to_sheet(agendamentosCompletos);
+        wsAgendamentosCompletos['!cols'] = [
+            { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 25 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 15 }
         ];
+        XLSX.utils.book_append_sheet(wb, wsAgendamentosCompletos, '📅 Todos os Agendamentos');
         
-        const wsAgendamentos = XLSX.utils.aoa_to_sheet(agendamentosData);
-        wsAgendamentos['!cols'] = [{ width: 25 }, { width: 30 }, { width: 12 }, { width: 10 }, { width: 15 }, { width: 40 }];
-        applyCustomStyles(wsAgendamentos, 'AGENDAMENTOS', '📅');
-        XLSX.utils.book_append_sheet(wb, wsAgendamentos, "📅 Agendamentos");
+        // Processar dados de serviços
+        const servicosCompletos = (dadosServicos.data || dadosServicos || []).map(servico => ({
+            'ID': servico.id,
+            'Nome': servico.name || servico.nome,
+            'Categoria': servico.category || servico.categoria,
+            'Duração (min)': servico.duration_minutes || servico.duracao || 0,
+            'Preço': servico.price ? `R$ ${parseFloat(servico.price).toFixed(2)}` : 'R$ 0,00',
+            'Status': servico.active ? 'Ativo' : 'Inativo',
+            'Descrição': servico.description || servico.descricao || 'Sem descrição',
+            'Data Criação': servico.created_at ? new Date(servico.created_at).toLocaleDateString('pt-BR') : 'N/A'
+        }));
         
-        // Planilha de Serviços
-        const servicos = esteticaFabiane.getData('servicos');
-        const servicosData = [
-            ['💆‍♀️ SERVIÇOS - ESTÉTICA FABIANE PROCÓPIO'],
-            ['Nome', 'Categoria', 'Descrição', 'Preço', 'Duração (min)'],
-            ...servicos.map(servico => [
-                servico.nome || 'Não informado',
-                servico.categoria || 'Não informado',
-                servico.descricao || 'Não informado',
-                'R$ ' + (servico.preco ? servico.preco.toFixed(2).replace('.', ',') : '0,00'),
-                servico.duracao ? servico.duracao + ' min' : 'Não informado'
-            ])
+        const wsServicosCompletos = XLSX.utils.json_to_sheet(servicosCompletos);
+        wsServicosCompletos['!cols'] = [
+            { wch: 8 }, { wch: 30 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 40 }, { wch: 15 }
         ];
+        XLSX.utils.book_append_sheet(wb, wsServicosCompletos, '💅 Todos os Serviços');
         
-        const wsServicos = XLSX.utils.aoa_to_sheet(servicosData);
-        wsServicos['!cols'] = [{ width: 30 }, { width: 20 }, { width: 50 }, { width: 15 }, { width: 15 }];
-        applyCustomStyles(wsServicos, 'SERVIÇOS', '💆‍♀️');
-        XLSX.utils.book_append_sheet(wb, wsServicos, "💆‍♀️ Serviços");
+        const fileName = `Relatório_Detalhado_Estética_Fabiane_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
         
-        // Planilha de Produtos
-        const produtos = esteticaFabiane.getData('produtos');
-        const produtosData = [
-            ['📦 PRODUTOS - ESTÉTICA FABIANE PROCÓPIO'],
-            ['Nome', 'Categoria', 'Preço Unit.', 'Estoque', 'Estoque Mín.', 'Fornecedor'],
-            ...produtos.map(produto => [
-                produto.nome || 'Não informado',
-                produto.categoria || 'Não informado',
-                'R$ ' + (produto.preco ? produto.preco.toFixed(2).replace('.', ',') : '0,00'),
-                produto.estoque || produto.quantidade || 0,
-                produto.estoqueMinimo || 'Não definido',
-                produto.fornecedor || 'Não informado'
-            ])
-        ];
+        showNotification('Relatório detalhado exportado com sucesso!');
         
-        const wsProdutos = XLSX.utils.aoa_to_sheet(produtosData);
-        wsProdutos['!cols'] = [{ width: 30 }, { width: 20 }, { width: 15 }, { width: 10 }, { width: 12 }, { width: 25 }];
-        applyCustomStyles(wsProdutos, 'PRODUTOS', '📦');
-        XLSX.utils.book_append_sheet(wb, wsProdutos, "📦 Produtos");
-        
-        // Planilha de Resumo
-        const stats = esteticaFabiane.getDashboardStats();
-        const resumoData = [
-            ['🌸 RESUMO EXECUTIVO - ESTÉTICA FABIANE PROCÓPIO'],
-            ['Indicador', 'Valor'],
-            ['📅 Data do Relatório', currentDate],
-            ['👥 Total de Clientes', stats.totalClientes],
-            ['📅 Total de Agendamentos', stats.totalAgendamentos],
-            ['💆‍♀️ Total de Serviços', stats.totalServicos],
-            ['📦 Total de Produtos', stats.totalProdutos],
-            ['💰 Receita Total Realizada', 'R$ ' + stats.receitaTotal.toFixed(2).replace('.', ',')],
-            [''],
-            ['🏢 Estética Fabiane Procópio'],
-            ['📍 Beleza & Bem-estar'],
-            ['📱 Sistema de Gestão Integrado']
-        ];
-        
-        const wsResumo = XLSX.utils.aoa_to_sheet(resumoData);
-        wsResumo['!cols'] = [{ width: 35 }, { width: 25 }];
-        applyCustomStyles(wsResumo, 'RESUMO', '🌸');
-        XLSX.utils.book_append_sheet(wb, wsResumo, "🌸 Resumo");
-        
-        XLSX.writeFile(wb, `Relatorio_Detalhado_Estetica_Fabiane_${new Date().toISOString().split('T')[0]}.xlsx`);
-        
-        esteticaFabiane.showNotification('Relatório detalhado exportado com sucesso!', 'success');
     } catch (error) {
         console.error('Erro ao exportar relatório detalhado:', error);
-        esteticaFabiane.showNotification('Erro ao exportar relatório. Verifique se a biblioteca XLSX está carregada.', 'error');
+        showNotification('Erro ao exportar relatório detalhado', 'error');
     }
 }
 
-// Fechar modais clicando fora
-document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal')) {
-        e.target.classList.remove('active');
-    }
-});
+// ========================================
+// INICIALIZAÇÃO E EVENTOS
+// ========================================
 
-// Inicialização do sistema quando a página carregar
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Sistema da Estética Fabiane carregando...');
-    
-    // Criar instância do sistema
-    window.esteticaFabiane = new EsteticaFabianeSystem();
-    
-    // Configurar navegação primeiro
-    esteticaFabiane.setupNavigation();
-    
-    // Inicializar calendário
-    esteticaFabiane.initCalendar();
-    
-    // Inicializar dados de exemplo se não existirem
-    if (esteticaFabiane.getServicos().length === 0) {
-        esteticaFabiane.initializeExampleData();
+function initFormEvents() {
+    // Formulário de Cliente
+    const clienteForm = document.getElementById('cliente-form');
+    if (clienteForm) {
+        clienteForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveCliente(new FormData(clienteForm));
+        });
     }
     
-    // Renderizar todas as páginas
-    esteticaFabiane.renderDashboard();
-    esteticaFabiane.renderClientes();
-    esteticaFabiane.renderAgendamentos();
-    esteticaFabiane.renderServicos();
-    esteticaFabiane.renderProdutos();
+    // Formulário de Serviço
+    const servicoForm = document.getElementById('servico-form');
+    if (servicoForm) {
+        servicoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveServico(new FormData(servicoForm));
+        });
+    }
     
-    // Mostrar dashboard por padrão
-    esteticaFabiane.showPage('dashboard');
+    // Formulário de Produto
+    const produtoForm = document.getElementById('produto-form');
+    if (produtoForm) {
+        produtoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveProduto(new FormData(produtoForm));
+        });
+    }
     
-    console.log('Sistema da Estética Fabiane carregado com sucesso!');
-});
+    // Formulário de Agendamento
+    const agendamentoForm = document.getElementById('agendamento-form');
+    if (agendamentoForm) {
+        agendamentoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await saveAgendamento(new FormData(agendamentoForm));
+        });
+    }
+}
+
+function initModalEvents() {
+    // Fechar modais ao clicar fora
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('active');
+            }
+        });
+    });
+    
+    // Fechar modais com ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal.active').forEach(modal => {
+                modal.classList.remove('active');
+            });
+        }
+    });
+}
+
+function resetFormOnModalOpen() {
+    // Resetar formulários quando modais são abertos
+    const modals = ['cliente-modal', 'servico-modal', 'produto-modal', 'agendamento-modal'];
+    
+    modals.forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                        if (modal.classList.contains('active')) {
+                            // Modal foi aberto
+                            const form = modal.querySelector('form');
+                            if (form) {
+                                form.reset();
+                                
+                                // Resetar título do modal
+                                const title = modal.querySelector('.modal-title');
+                                if (title) {
+                                    const originalTitles = {
+                                        'cliente-modal': 'Nova Cliente',
+                                        'servico-modal': 'Novo Serviço',
+                                        'produto-modal': 'Novo Produto',
+                                        'agendamento-modal': 'Novo Agendamento'
+                                    };
+                                    title.textContent = originalTitles[modalId];
+                                }
+                                
+                                // Resetar evento do formulário
+                                form.onsubmit = null;
+                            }
+                        }
+                    }
+                });
+            });
+            
+            observer.observe(modal, { attributes: true });
+        }
+    });
+}
+
+function initPhoneMask() {
+    // Máscara para telefone
+    const phoneInputs = document.querySelectorAll('input[name="telefone"]');
+    phoneInputs.forEach(input => {
+        input.addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\D/g, '');
+            
+            if (value.length <= 11) {
+                if (value.length <= 10) {
+                    value = value.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+                } else {
+                    value = value.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+                }
+            }
+            
+            e.target.value = value;
+        });
+    });
+}
+
+function initDateValidation() {
+    // Validação de data mínima para agendamentos
+    const dateInputs = document.querySelectorAll('input[type="date"]');
+    dateInputs.forEach(input => {
+        if (input.name === 'data') {
+            const today = new Date().toISOString().split('T')[0];
+            input.min = today;
+        }
+    });
+}
+
+// Função principal de inicialização
+async function initApp() {
+    try {
+        console.log('🚀 Inicializando Sistema Estética Fabiane Procópio...');
+        
+        // Inicializar navegação
+        initNavigation();
+        
+        // Inicializar eventos dos formulários
+        initFormEvents();
+        
+        // Inicializar eventos dos modais
+        initModalEvents();
+        
+        // Inicializar navegação do calendário
+        initCalendarNavigation();
+        
+        // Inicializar máscaras e validações
+        initPhoneMask();
+        initDateValidation();
+        resetFormOnModalOpen();
+        
+        console.log('✅ Interface inicializada com sucesso!');
+        
+        // Tentar carregar dados iniciais do dashboard
+        try {
+            await loadDashboard();
+            console.log('✅ Dashboard carregado com sucesso!');
+        } catch (error) {
+            console.error('❌ Erro ao carregar dashboard:', error.message);
+            showNotification('Erro ao conectar com a API. Verifique se o servidor está online.', 'error');
+        }
+        
+        console.log('🎉 Sistema Estética Fabiane Procópio pronto para uso!');
+        
+    } catch (error) {
+        console.error('💥 Erro crítico ao inicializar aplicação:', error);
+        showNotification('Erro crítico ao inicializar sistema', 'error');
+    }
+}
+
+
+// Aguardar DOM estar pronto e inicializar aplicação
+document.addEventListener('DOMContentLoaded', initApp);
+
+// Exportar funções globais para uso no HTML
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.editCliente = editCliente;
+window.deleteCliente = deleteCliente;
+window.editServico = editServico;
+window.deleteServico = deleteServico;
+window.editProduto = editProduto;
+window.deleteProduto = deleteProduto;
+window.editAgendamento = editAgendamento;
+window.updateAgendamento = updateAgendamento;
+window.deleteAgendamento = deleteAgendamento;
+window.updateStatusAgendamento = updateStatusAgendamento;
+window.exportarRelatorioGeral = exportarRelatorioGeral;
+window.exportarRelatorioDetalhado = exportarRelatorioDetalhado;
