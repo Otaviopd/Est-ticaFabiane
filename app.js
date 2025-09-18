@@ -456,21 +456,33 @@ async function updateCliente(clienteId, formData) {
 }
 
 async function deleteCliente(clienteId) {
-    if (!confirm('Tem certeza que deseja excluir esta cliente?')) {
+    if (!confirm('Tem certeza que deseja excluir este cliente?')) {
         return;
     }
     
     try {
-        await apiRequest(`/clientes/${clienteId}`, {
+        const response = await apiRequest(`/clientes/${clienteId}`, {
             method: 'DELETE'
         });
         
-        showNotification('Cliente excluída com sucesso!');
+        // Verificar se foi desativado ou excluído
+        if (response.client) {
+            showNotification('Cliente desativado (possui agendamentos)!', 'warning');
+        } else {
+            showNotification('Cliente excluído com sucesso!');
+        }
+        
         await loadClientes();
         
     } catch (error) {
         console.error('Erro ao excluir cliente:', error);
-        showNotification('Erro ao excluir cliente', 'error');
+        
+        // Tratar erro específico
+        if (error.message && error.message.includes('agendamentos')) {
+            showNotification('Não é possível excluir cliente com agendamentos', 'error');
+        } else {
+            showNotification('Erro ao excluir cliente', 'error');
+        }
     }
 }
 
@@ -614,16 +626,28 @@ async function deleteServico(servicoId) {
     }
     
     try {
-        await apiRequest(`/servicos/${servicoId}`, {
+        const response = await apiRequest(`/servicos/${servicoId}`, {
             method: 'DELETE'
         });
         
-        showNotification('Serviço excluído com sucesso!');
+        // Verificar se foi desativado ou excluído
+        if (response.service) {
+            showNotification('Serviço desativado (possui agendamentos)!', 'warning');
+        } else {
+            showNotification('Serviço excluído com sucesso!');
+        }
+        
         await loadServicos();
         
     } catch (error) {
         console.error('Erro ao excluir serviço:', error);
-        showNotification('Erro ao excluir serviço', 'error');
+        
+        // Tratar erro específico
+        if (error.message && error.message.includes('agendamentos')) {
+            showNotification('Não é possível excluir serviço com agendamentos', 'error');
+        } else {
+            showNotification('Erro ao excluir serviço', 'error');
+        }
     }
 }
 
