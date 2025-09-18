@@ -189,6 +189,18 @@ function openModal(modalId) {
         const form = modal.querySelector('form');
         if (form) {
             form.reset();
+            
+            // Resetar para modo de criação se for cliente
+            if (modalId === 'cliente-modal') {
+                // Alterar título para novo
+                document.querySelector('#cliente-modal .modal-title').textContent = 'Nova Cliente';
+                
+                // Resetar ação do formulário para criar
+                form.onsubmit = async (e) => {
+                    e.preventDefault();
+                    await saveCliente(new FormData(form));
+                };
+            }
         }
         
         // Carregar dados específicos do modal
@@ -405,12 +417,12 @@ async function editCliente(clienteId) {
         
         // Preencher formulário
         const form = document.getElementById('cliente-form');
-        form.nome.value = cliente.nome || '';
-        form.telefone.value = cliente.telefone || '';
+        form.nome.value = cliente.full_name || cliente.nome || '';
+        form.telefone.value = cliente.phone || cliente.telefone || '';
         form.email.value = cliente.email || '';
-        form.dataNascimento.value = cliente.data_nascimento || '';
-        form.endereco.value = cliente.endereco || '';
-        form.observacoes.value = cliente.observacoes || '';
+        form.dataNascimento.value = cliente.birth_date || cliente.data_nascimento || '';
+        form.endereco.value = cliente.address || cliente.endereco || '';
+        form.observacoes.value = cliente.observations || cliente.observacoes || '';
         
         // Alterar título do modal
         document.querySelector('#cliente-modal .modal-title').textContent = 'Editar Cliente';
@@ -432,12 +444,12 @@ async function editCliente(clienteId) {
 async function updateCliente(clienteId, formData) {
     try {
         const clienteData = {
-            nome: formData.get('nome'),
-            telefone: formData.get('telefone'),
+            full_name: formData.get('nome'),
+            phone: formData.get('telefone'),
             email: formData.get('email'),
-            data_nascimento: formData.get('dataNascimento'),
-            endereco: formData.get('endereco'),
-            observacoes: formData.get('observacoes')
+            birth_date: formData.get('dataNascimento'),
+            address: formData.get('endereco'),
+            observations: formData.get('observacoes')
         };
         
         await apiRequest(`/clientes/${clienteId}`, {
@@ -445,7 +457,7 @@ async function updateCliente(clienteId, formData) {
             body: JSON.stringify(clienteData)
         });
         
-        showNotification('Cliente atualizada com sucesso!');
+        showNotification('Cliente atualizado com sucesso!');
         closeModal('cliente-modal');
         await loadClientes();
         
@@ -465,12 +477,7 @@ async function deleteCliente(clienteId) {
             method: 'DELETE'
         });
         
-        // Verificar se foi desativado ou excluído
-        if (response.client) {
-            showNotification('Cliente desativado (possui agendamentos)!', 'warning');
-        } else {
-            showNotification('Cliente excluído com sucesso!');
-        }
+        showNotification('Cliente excluído com sucesso!');
         
         await loadClientes();
         
