@@ -42,18 +42,21 @@ async function apiRequest(endpoint, options = {}) {
         const response = await fetch(url, config);
         
         if (!response.ok) {
-            const errorMessage = `Erro ${response.status}: ${response.statusText}`;
-            console.error(`❌ API Error: ${errorMessage} - ${url}`);
-            
-            if (response.status === 404) {
-                showNotification(`API não encontrada. Verifique se o servidor está rodando: ${endpoint}`, 'error');
-            } else if (response.status === 500) {
-                showNotification('Erro interno do servidor. Tente novamente.', 'error');
-            } else {
-                showNotification(`Erro na API: ${response.status}`, 'error');
+            // Tentar ler a mensagem de erro da API
+            let errorData;
+            try {
+                errorData = await response.json();
+            } catch (e) {
+                errorData = { error: `Erro ${response.status}: ${response.statusText}` };
             }
             
-            throw new Error(errorMessage);
+            console.error(`❌ API Error: ${response.status} - ${url}`, errorData);
+            
+            // Lançar erro com a mensagem da API
+            const error = new Error(errorData.error || errorData.message || `Erro ${response.status}`);
+            error.status = response.status;
+            error.data = errorData;
+            throw error;
         }
         
         const data = await response.json();
