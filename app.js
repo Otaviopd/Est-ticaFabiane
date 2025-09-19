@@ -555,13 +555,15 @@ function renderServicosTable(servicos) {
 async function saveServico(formData) {
     try {
         const servicoData = {
-            nome: formData.get('nome'),
-            categoria: formData.get('categoria'),
-            duracao: parseInt(formData.get('duracao')),
-            preco: parseFloat(formData.get('preco')),
-            descricao: formData.get('descricao'),
-            ativo: true
+            name: formData.get('nome'),
+            category: formData.get('categoria'),
+            duration_minutes: parseInt(formData.get('duracao')) || 60,
+            price: parseFloat(formData.get('preco')),
+            description: formData.get('descricao') || '',
+            status: 'ativo'
         };
+        
+        console.log('Dados do serviço:', servicoData);
         
         await apiRequest('/servicos', {
             method: 'POST',
@@ -610,11 +612,11 @@ async function editServico(servicoId) {
 async function updateServico(servicoId, formData) {
     try {
         const servicoData = {
-            nome: formData.get('nome'),
-            categoria: formData.get('categoria'),
-            duracao: parseInt(formData.get('duracao')),
-            preco: parseFloat(formData.get('preco')),
-            descricao: formData.get('descricao')
+            name: formData.get('nome'),
+            category: formData.get('categoria'),
+            duration_minutes: parseInt(formData.get('duracao')) || 60,
+            price: parseFloat(formData.get('preco')),
+            description: formData.get('descricao') || ''
         };
         
         await apiRequest(`/servicos/${servicoId}`, {
