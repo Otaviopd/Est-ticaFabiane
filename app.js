@@ -999,29 +999,53 @@ async function loadServicosSelect() {
 }
 
 async function saveAgendamento(formData) {
+    console.log('🚀 SALVANDO AGENDAMENTO - Iniciando...');
+    
     try {
         const agendamentoData = {
             client_id: parseInt(formData.get('clienteId')),
             service_id: parseInt(formData.get('servicoId')),
             appointment_date: formData.get('data'),
             appointment_time: formData.get('horario') + ':00',
-            observations: formData.get('observacoes') || null
+            observations: formData.get('observacoes') || ''
         };
         
-        console.log('Dados do agendamento:', agendamentoData);
+        console.log('📋 Dados do agendamento:', agendamentoData);
         
-        await apiRequest('/agendamentos', {
+        // Validações no frontend
+        if (!agendamentoData.client_id || !agendamentoData.service_id || !agendamentoData.appointment_date || !agendamentoData.appointment_time) {
+            throw new Error('Todos os campos obrigatórios devem ser preenchidos');
+        }
+        
+        console.log('📡 Enviando para API...');
+        
+        const response = await apiRequest('/agendamentos', {
             method: 'POST',
             body: JSON.stringify(agendamentoData)
         });
         
-        showNotification('Agendamento criado com sucesso!');
+        console.log('✅ Resposta da API:', response);
+        
+        // Tratar diferentes tipos de resposta
+        const message = response.message || response.success || 'Agendamento criado com sucesso!';
+        showNotification(message, 'success');
+        
         closeModal('agendamento-modal');
-        await loadCalendario(); // Recarregar calendário
+        
+        // Recarregar dados
+        console.log('🔄 Recarregando dados...');
+        await loadAgendamentos();
+        await loadDashboard();
+        
+        console.log('✅ Agendamento salvo com sucesso!');
         
     } catch (error) {
-        console.error('Erro ao salvar agendamento:', error);
-        showNotification('Erro ao criar agendamento', 'error');
+        console.error('💥 ERRO COMPLETO ao salvar agendamento:');
+        console.error('- Mensagem:', error.message);
+        console.error('- Erro completo:', error);
+        
+        const errorMessage = error.message || 'Erro ao salvar agendamento';
+        showNotification(errorMessage, 'error');
     }
 }
 
