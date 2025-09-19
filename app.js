@@ -883,18 +883,46 @@ async function deleteProduto(produtoId) {
 
 async function loadAgendamentos() {
     try {
-        const response = await apiRequest('/agendamentos');
-        console.log('📊 Resposta agendamentos:', response);
+        console.log('📊 Carregando agendamentos (API + Local)...');
         
-        // A API pode retornar {data: [...]} ou diretamente o array
-        const agendamentos = response.data || response || [];
-        console.log('📊 Array agendamentos:', agendamentos);
+        let agendamentosAPI = [];
+        let agendamentosLocais = [];
         
-        AppState.agendamentos = agendamentos;
-        renderAgendamentosTable(agendamentos);
+        // Tentar carregar da API
+        try {
+            const response = await apiRequest('/agendamentos');
+            agendamentosAPI = response.data || response || [];
+            console.log('✅ API:', agendamentosAPI.length, 'agendamentos');
+        } catch (apiError) {
+            console.warn('⚠️ API falhou, usando apenas dados locais');
+        }
+        
+        // Carregar agendamentos locais
+        agendamentosLocais = loadAgendamentosLocais();
+        console.log('💾 Local:', agendamentosLocais.length, 'agendamentos');
+        
+        // Combinar API + Local
+        const todosAgendamentos = [...agendamentosAPI, ...agendamentosLocais];
+        
+        // Ordenar por data
+        todosAgendamentos.sort((a, b) => {
+            const dataA = new Date(a.appointment_date + ' ' + a.appointment_time);
+            const dataB = new Date(b.appointment_date + ' ' + b.appointment_time);
+            return dataB - dataA; // Mais recentes primeiro
+        });
+        
+        console.log('📋 Total combinado:', todosAgendamentos.length, 'agendamentos');
+        
+        AppState.agendamentos = todosAgendamentos;
+        renderAgendamentosTable(todosAgendamentos);
+        
     } catch (error) {
-        console.error('Erro ao carregar agendamentos:', error);
-        renderAgendamentosTable([]);
+        console.error('❌ Erro geral ao carregar agendamentos:', error);
+        
+        // Fallback: apenas locais
+        const agendamentosLocais = loadAgendamentosLocais();
+        AppState.agendamentos = agendamentosLocais;
+        renderAgendamentosTable(agendamentosLocais);
     }
 }
 
@@ -912,10 +940,14 @@ function renderAgendamentosTable(agendamentos) {
         return;
     }
     
-    tbody.innerHTML = agendamentos.map(agendamento => `
-        <tr>
+    tbody.innerHTML = agendamentos.map(agendamento => {
+        const isLocal = agendamento.local_backup;
+        const localBadge = isLocal ? '<span class="badge badge-warning" style="font-size: 0.7em; margin-left: 0.5rem;">💾 LOCAL</span>' : '';
+        
+        return `
+        <tr ${isLocal ? 'style="background-color: #fff3cd;"' : ''}>
             <td>${formatDate(agendamento.appointment_date)} ${agendamento.appointment_time || ''}</td>
-            <td>${agendamento.client_name || agendamento.cliente_nome || 'N/A'}</td>
+            <td>${agendamento.client_name || agendamento.cliente_nome || 'N/A'}${localBadge}</td>
             <td>${agendamento.service_name || agendamento.servico_nome || 'N/A'}</td>
             <td>
                 <span class="badge badge-${getStatusClass(agendamento.status)}">
@@ -924,6 +956,7 @@ function renderAgendamentosTable(agendamentos) {
             </td>
             <td>${formatCurrency(agendamento.total_price || agendamento.preco || 0)}</td>
             <td>
+                ${!isLocal ? `
                 <button class="btn btn-sm btn-outline" onclick="editAgendamento(${agendamento.id})">
                     <i class="fas fa-edit"></i>
                 </button>
@@ -933,9 +966,15 @@ function renderAgendamentosTable(agendamentos) {
                 <button class="btn btn-sm btn-outline" onclick="deleteAgendamento(${agendamento.id})" style="margin-left: 0.5rem;">
                     <i class="fas fa-trash"></i>
                 </button>
+                ` : `
+                <button class="btn btn-sm btn-warning" onclick="deleteAgendamentoLocal('${agendamento.id}')">
+                    <i class="fas fa-trash"></i> Remover Local
+                </button>
+                `}
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function getStatusClass(status) {
@@ -998,8 +1037,85 @@ async function loadServicosSelect() {
     console.log('✅ Select preenchido com', servicos.length, 'serviços');
 }
 
+// =====================================================
+// SISTEMA DE BACKUP LOCAL - SEMPRE FUNCIONA
+// =====================================================
+
+function saveAgendamentoLocal(agendamentoData) {
+    try {
+        // Gerar ID único
+        const id = Date.now() + Math.random().toString(36).substr(2, 9);
+        
+        // Buscar cliente e serviço para nomes
+        const cliente = AppState.clientes.find(c => c.id == agendamentoData.client_id);
+        const servico = AppState.servicos.find(s => s.id == agendamentoData.service_id) || SERVICOS_CACHE.find(s => s.id == agendamentoData.service_id);
+        
+        const agendamentoCompleto = {
+            id: id,
+            ...agendamentoData,
+            client_name: cliente ? (cliente.nome || cliente.full_name) : `Cliente ${agendamentoData.client_id}`,
+            service_name: servico ? servico.name : `Serviço ${agendamentoData.service_id}`,
+            total_price: servico ? servico.price : 120.00,
+            status: 'agendado',
+            created_at: new Date().toISOString(),
+            local_backup: true // Marca como backup local
+        };
+        
+        // Salvar no localStorage
+        let agendamentosLocais = JSON.parse(localStorage.getItem('agendamentos_backup') || '[]');
+        agendamentosLocais.push(agendamentoCompleto);
+        localStorage.setItem('agendamentos_backup', JSON.stringify(agendamentosLocais));
+        
+        console.log('💾 AGENDAMENTO SALVO LOCALMENTE:', agendamentoCompleto);
+        
+        return agendamentoCompleto;
+        
+    } catch (error) {
+        console.error('❌ Erro ao salvar localmente:', error);
+        throw error;
+    }
+}
+
+function loadAgendamentosLocais() {
+    try {
+        const agendamentosLocais = JSON.parse(localStorage.getItem('agendamentos_backup') || '[]');
+        console.log('💾 Agendamentos locais carregados:', agendamentosLocais.length);
+        return agendamentosLocais;
+    } catch (error) {
+        console.error('❌ Erro ao carregar agendamentos locais:', error);
+        return [];
+    }
+}
+
+function deleteAgendamentoLocal(agendamentoId) {
+    try {
+        let agendamentosLocais = JSON.parse(localStorage.getItem('agendamentos_backup') || '[]');
+        agendamentosLocais = agendamentosLocais.filter(a => a.id !== agendamentoId);
+        localStorage.setItem('agendamentos_backup', JSON.stringify(agendamentosLocais));
+        
+        console.log('🗑️ Agendamento local removido:', agendamentoId);
+        showNotification('Agendamento local removido!', 'success');
+        
+        // Recarregar lista
+        loadAgendamentos();
+        
+    } catch (error) {
+        console.error('❌ Erro ao remover agendamento local:', error);
+        showNotification('Erro ao remover agendamento local', 'error');
+    }
+}
+
+function clearAllLocalAgendamentos() {
+    if (confirm('Tem certeza que deseja limpar todos os agendamentos locais?')) {
+        localStorage.removeItem('agendamentos_backup');
+        console.log('🗑️ Todos os agendamentos locais removidos');
+        showNotification('Agendamentos locais limpos!', 'success');
+        loadAgendamentos();
+    }
+}
+
 async function saveAgendamento(formData) {
-    console.log('🚀 SALVANDO AGENDAMENTO - Iniciando...');
+    console.log('🚀 SALVANDO AGENDAMENTO - Sistema com fallback local');
     
     try {
         // PEGAR VALORES EXATOS DO FORMULÁRIO
@@ -1009,27 +1125,13 @@ async function saveAgendamento(formData) {
         const horario = formData.get('horario');
         const observacoes = formData.get('observacoes') || '';
         
-        console.log('🔍 VALORES BRUTOS DO FORMULÁRIO:');
-        console.log('- clienteId:', clienteId, typeof clienteId);
-        console.log('- servicoId:', servicoId, typeof servicoId);
-        console.log('- data:', data);
-        console.log('- horario:', horario);
+        console.log('🔍 VALORES DO FORMULÁRIO:', { clienteId, servicoId, data, horario });
         
-        // VALIDAÇÕES RIGOROSAS
-        if (!clienteId || clienteId === '' || clienteId === 'null') {
-            throw new Error('Cliente é obrigatório');
-        }
-        if (!servicoId || servicoId === '' || servicoId === 'null') {
-            throw new Error('Serviço é obrigatório');
-        }
-        if (!data) {
-            throw new Error('Data é obrigatória');
-        }
-        if (!horario) {
-            throw new Error('Horário é obrigatório');
+        // VALIDAÇÕES
+        if (!clienteId || !servicoId || !data || !horario) {
+            throw new Error('Todos os campos são obrigatórios');
         }
         
-        // PAYLOAD EXATO COMO O BACKEND ESPERA
         const agendamentoData = {
             client_id: parseInt(clienteId),
             service_id: parseInt(servicoId),
@@ -1038,28 +1140,44 @@ async function saveAgendamento(formData) {
             observations: observacoes
         };
         
-        console.log('📋 PAYLOAD FINAL:', agendamentoData);
+        console.log('📋 DADOS PREPARADOS:', agendamentoData);
         
-        // USAR ROTA SEGURA SEM FOREIGN KEY
-        const response = await apiRequest('/agendamentos/safe', {
-            method: 'POST',
-            body: JSON.stringify(agendamentoData)
-        });
+        // TENTAR API PRIMEIRO
+        try {
+            console.log('📡 Tentando salvar na API...');
+            
+            const response = await apiRequest('/agendamentos/safe', {
+                method: 'POST',
+                body: JSON.stringify(agendamentoData)
+            });
+            
+            console.log('✅ API FUNCIONOU! Resposta:', response);
+            showNotification('Agendamento salvo na API com sucesso!', 'success');
+            
+        } catch (apiError) {
+            console.warn('⚠️ API FALHOU, usando backup local:', apiError.message);
+            
+            // FALLBACK LOCAL - SEMPRE FUNCIONA
+            const agendamentoLocal = saveAgendamentoLocal(agendamentoData);
+            
+            showNotification('💾 Agendamento salvo localmente! (API indisponível)', 'warning');
+            
+            // Adicionar ao estado local para exibição imediata
+            if (!AppState.agendamentos) AppState.agendamentos = [];
+            AppState.agendamentos.push(agendamentoLocal);
+        }
         
-        console.log('✅ Resposta da API:', response);
-        
-        showNotification('Agendamento criado com sucesso!', 'success');
         closeModal('agendamento-modal');
         
+        // Recarregar dados (vai incluir locais)
         await loadAgendamentos();
         await loadDashboard();
         
-    } catch (error) {
-        console.error('💥 ERRO COMPLETO ao salvar agendamento:');
-        console.error('- Mensagem:', error.message);
-        console.error('- Erro completo:', error);
+        console.log('✅ AGENDAMENTO PROCESSADO COM SUCESSO!');
         
-        showNotification(error.message || 'Erro ao salvar agendamento', 'error');
+    } catch (error) {
+        console.error('💥 ERRO GERAL:', error);
+        showNotification(error.message || 'Erro ao processar agendamento', 'error');
     }
 }
 
