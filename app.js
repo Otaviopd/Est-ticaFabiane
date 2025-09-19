@@ -1002,22 +1002,43 @@ async function saveAgendamento(formData) {
     console.log('🚀 SALVANDO AGENDAMENTO - Iniciando...');
     
     try {
-        const agendamentoData = {
-            client_id: parseInt(formData.get('clienteId')),
-            service_id: parseInt(formData.get('servicoId')),
-            appointment_date: formData.get('data'),
-            appointment_time: formData.get('horario') + ':00',
-            observations: formData.get('observacoes') || ''
-        };
+        // PEGAR VALORES EXATOS DO FORMULÁRIO
+        const clienteId = formData.get('clienteId');
+        const servicoId = formData.get('servicoId');
+        const data = formData.get('data');
+        const horario = formData.get('horario');
+        const observacoes = formData.get('observacoes') || '';
         
-        console.log('📋 Dados do agendamento:', agendamentoData);
+        console.log('🔍 VALORES BRUTOS DO FORMULÁRIO:');
+        console.log('- clienteId:', clienteId, typeof clienteId);
+        console.log('- servicoId:', servicoId, typeof servicoId);
+        console.log('- data:', data);
+        console.log('- horario:', horario);
         
-        // Validações no frontend
-        if (!agendamentoData.client_id || !agendamentoData.service_id || !agendamentoData.appointment_date || !agendamentoData.appointment_time) {
-            throw new Error('Todos os campos obrigatórios devem ser preenchidos');
+        // VALIDAÇÕES RIGOROSAS
+        if (!clienteId || clienteId === '' || clienteId === 'null') {
+            throw new Error('Cliente é obrigatório');
+        }
+        if (!servicoId || servicoId === '' || servicoId === 'null') {
+            throw new Error('Serviço é obrigatório');
+        }
+        if (!data) {
+            throw new Error('Data é obrigatória');
+        }
+        if (!horario) {
+            throw new Error('Horário é obrigatório');
         }
         
-        console.log('📡 Enviando para API...');
+        // PAYLOAD EXATO COMO O BACKEND ESPERA
+        const agendamentoData = {
+            client_id: parseInt(clienteId),
+            service_id: parseInt(servicoId),
+            appointment_date: data,
+            appointment_time: horario + ':00',
+            observations: observacoes
+        };
+        
+        console.log('📋 PAYLOAD FINAL:', agendamentoData);
         
         const response = await apiRequest('/agendamentos', {
             method: 'POST',
@@ -1026,26 +1047,18 @@ async function saveAgendamento(formData) {
         
         console.log('✅ Resposta da API:', response);
         
-        // Tratar diferentes tipos de resposta
-        const message = response.message || response.success || 'Agendamento criado com sucesso!';
-        showNotification(message, 'success');
-        
+        showNotification('Agendamento criado com sucesso!', 'success');
         closeModal('agendamento-modal');
         
-        // Recarregar dados
-        console.log('🔄 Recarregando dados...');
         await loadAgendamentos();
         await loadDashboard();
-        
-        console.log('✅ Agendamento salvo com sucesso!');
         
     } catch (error) {
         console.error('💥 ERRO COMPLETO ao salvar agendamento:');
         console.error('- Mensagem:', error.message);
         console.error('- Erro completo:', error);
         
-        const errorMessage = error.message || 'Erro ao salvar agendamento';
-        showNotification(errorMessage, 'error');
+        showNotification(error.message || 'Erro ao salvar agendamento', 'error');
     }
 }
 
