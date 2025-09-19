@@ -666,6 +666,29 @@ async function deleteServico(servicoId) {
 }
 
 // ========================================
+// POPULAR SERVIÇOS DA ESTÉTICA
+// ========================================
+
+async function popularServicos() {
+    if (!confirm('Deseja carregar os serviços padrão da Estética Fabiane? Isso adicionará 6 serviços: 4 tratamentos individuais + 2 pacotes de massagem.')) {
+        return;
+    }
+    
+    try {
+        const response = await apiRequest('/servicos/populate', {
+            method: 'POST'
+        });
+        
+        showNotification(`${response.message} (${response.total} serviços adicionados)`, 'success');
+        await loadServicos();
+        
+    } catch (error) {
+        console.error('Erro ao popular serviços:', error);
+        showNotification('Erro ao carregar serviços', 'error');
+    }
+}
+
+// ========================================
 // PRODUTOS
 // ========================================
 
