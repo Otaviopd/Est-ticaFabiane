@@ -1040,7 +1040,8 @@ async function saveAgendamento(formData) {
         
         console.log('📋 PAYLOAD FINAL:', agendamentoData);
         
-        const response = await apiRequest('/agendamentos', {
+        // USAR ROTA SEGURA SEM FOREIGN KEY
+        const response = await apiRequest('/agendamentos/safe', {
             method: 'POST',
             body: JSON.stringify(agendamentoData)
         });
