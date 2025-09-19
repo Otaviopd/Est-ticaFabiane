@@ -503,22 +503,29 @@ async function deleteCliente(clienteId) {
 // ========================================
 
 async function loadServicos() {
+    console.log('🚀 loadServicos() iniciada - Carregando serviços fixos da API');
     try {
         const response = await apiRequest('/servicos');
-        // A API pode retornar {data: [...]} ou diretamente o array
         const servicos = response.data || response || [];
+        
+        console.log('📊 Serviços recebidos:', servicos.length);
+        
         AppState.servicos = servicos;
         renderServicosTable(servicos);
+        
     } catch (error) {
-        console.error('Erro ao carregar serviços:', error);
+        console.error('💥 Erro ao carregar serviços:', error);
         renderServicosTable([]);
     }
 }
 
 function renderServicosTable(servicos) {
+    console.log('🔍 renderServicosTable chamada com:', servicos);
     const tbody = document.getElementById('servicos-table');
+    console.log('📋 Elemento tbody encontrado:', tbody);
     
     if (!servicos || servicos.length === 0) {
+        console.log('❌ Nenhum serviço para renderizar');
         tbody.innerHTML = `
             <tr>
                 <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
@@ -529,6 +536,8 @@ function renderServicosTable(servicos) {
         return;
     }
     
+    console.log('✅ Renderizando', servicos.length, 'serviços');
+    
     tbody.innerHTML = servicos.map(servico => `
         <tr>
             <td>${servico.name || servico.nome || 'N/A'}</td>
@@ -536,8 +545,8 @@ function renderServicosTable(servicos) {
             <td>${servico.duration_minutes || servico.duracao || 0} min</td>
             <td>${formatCurrency(servico.price || servico.preco || 0)}</td>
             <td>
-                <span class="badge badge-${(servico.active !== undefined ? servico.active : servico.ativo) ? 'success' : 'danger'}">
-                    ${(servico.active !== undefined ? servico.active : servico.ativo) ? 'Ativo' : 'Inativo'}
+                <span class="badge badge-${(servico.status === 'ativo' || servico.active || servico.ativo) ? 'success' : 'danger'}">
+                    ${(servico.status === 'ativo' || servico.active || servico.ativo) ? 'Ativo' : 'Inativo'}
                 </span>
             </td>
             <td>
@@ -680,7 +689,11 @@ async function popularServicos() {
         });
         
         showNotification(`${response.message} (${response.total} serviços adicionados)`, 'success');
-        await loadServicos();
+        
+        // Forçar recarregamento da lista
+        setTimeout(async () => {
+            await loadServicos();
+        }, 1000);
         
     } catch (error) {
         console.error('Erro ao popular serviços:', error);
