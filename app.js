@@ -424,16 +424,19 @@ async function editCliente(clienteId) {
         form.endereco.value = cliente.address || cliente.endereco || '';
         form.observacoes.value = cliente.observations || cliente.observacoes || '';
         
-        // Alterar título do modal
-        document.querySelector('#cliente-modal .modal-title').textContent = 'Editar Cliente';
-        
-        // Alterar ação do formulário
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            await updateCliente(clienteId, new FormData(form));
-        };
-        
+        // Abrir modal primeiro
         openModal('cliente-modal');
+        
+        // DEPOIS alterar título e ação (para não ser sobrescrito)
+        setTimeout(() => {
+            document.querySelector('#cliente-modal .modal-title').textContent = 'Editar Cliente';
+            
+            // Alterar ação do formulário
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                await updateCliente(clienteId, new FormData(form));
+            };
+        }, 100);
         
     } catch (error) {
         console.error('Erro ao carregar cliente:', error);
@@ -478,15 +481,14 @@ async function deleteCliente(clienteId) {
         });
         
         showNotification('Cliente excluído com sucesso!');
-        
         await loadClientes();
         
     } catch (error) {
-        console.error('Erro ao excluir cliente:', error);
+        console.error('Erro completo:', error);
         
-        // Tratar erro específico
-        if (error.message && error.message.includes('agendamentos')) {
-            showNotification('Não é possível excluir cliente com agendamentos', 'error');
+        // Verificar se é erro 400 com mensagem específica
+        if (error.status === 400 || error.message.includes('400')) {
+            showNotification('Cliente possui agendamentos e não pode ser excluído', 'error');
         } else {
             showNotification('Erro ao excluir cliente', 'error');
         }
